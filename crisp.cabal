@@ -1,0 +1,69 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.38.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           crisp
+version:        0.1.0.0
+synopsis:       An interpreter of a custom Lisp subset.
+description:    Please see the README on GitHub at <https://github.com/P1X3R/crisp#readme>
+category:       language
+homepage:       https://github.com/P1X3R/crisp#readme
+bug-reports:    https://github.com/P1X3R/crisp/issues
+author:         P1X3R
+maintainer:     p1x3r@proton.me
+copyright:      2026 P1X3R
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/P1X3R/crisp
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_crisp
+  autogen-modules:
+      Paths_crisp
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+  default-language: Haskell2010
+
+executable crisp-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_crisp
+  autogen-modules:
+      Paths_crisp
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , crisp
+  default-language: Haskell2010
+
+test-suite crisp-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_crisp
+  autogen-modules:
+      Paths_crisp
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , crisp
+  default-language: Haskell2010

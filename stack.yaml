@@ -1,0 +1,5 @@
+snapshot: lts-24.35
+packages:
+- .
+arch: x86_64
+compiler-check: newer-minor

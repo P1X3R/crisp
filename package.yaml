@@ -1,0 +1,55 @@
+name:                crisp
+version:             0.1.0.0
+github:              "P1X3R/crisp"
+license:             BSD-3-Clause
+author:              "P1X3R"
+maintainer:          "p1x3r@proton.me"
+copyright:           "2026 P1X3R"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+synopsis:            An interpreter of a custom Lisp subset.
+category:            language
+
+description:         Please see the README on GitHub at <https://github.com/P1X3R/crisp#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+
+executables:
+  crisp-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - crisp
+
+tests:
+  crisp-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - crisp
