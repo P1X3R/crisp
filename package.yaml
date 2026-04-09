@@ -31,6 +31,9 @@ ghc-options:
 
 library:
   source-dirs: src
+  dependencies:
+  - text
+  - transformers
 
 executables:
   crisp-exe:
