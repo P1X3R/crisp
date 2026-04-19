@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Lexer (
     TokenData (..),
     Token (..),
@@ -8,6 +10,10 @@ module Lexer (
 import Control.Monad.Trans.State (StateT)
 import Data.Char (isSpace)
 import Data.Text as T
+import Control.Monad.Error.Class (MonadError (throwError))
+import Control.Monad.Trans.Except (Except)
+import Control.Monad.Trans.State (StateT, gets, modify)
+import qualified Data.Text as T
 
 data TokenData
     = TLeftParen
@@ -21,8 +27,8 @@ data TokenData
     deriving (Show, Eq)
 
 data Position = Position
-    { line :: Int
-    , column :: Int
+    { pLine :: Int
+    , pColumn :: Int
     }
     deriving (Show, Eq)
 
@@ -32,34 +38,37 @@ data Token = Token
     }
     deriving (Show, Eq)
 
-data LangError
-    = LEUnclosedStr
-    | LEInvalidNumber
-    | LEInvalidBool
+data LangError = LELexerError LexerDetail deriving (Show, Eq)
+
+data LexerDetail
+    = LDMultipleDotInNumber
+    | LDInvalidNumber
+    | LDUnexpectedPeek
+    | LDNoMatch
     deriving (Show, Eq)
 
 data ParserState = ParserState
-    { remaining :: T.Text
-    , position :: Position
+    { pRest :: T.Text
+    , pPos :: Position
     }
 
-type ParserResult = StateT ParserState (Either LangError) Token
-type Parser = T.Text -> Position -> Maybe ParserResult
+type Parser a = StateT ParserState (Except LangError) a
 
-advance :: Position -> Char -> Position
-advance position c =
-    if c == '\n'
-        then Position (line position + 1) 0
-        else Position (line position) (column position + 1)
+advance :: ParserState -> ParserState
+advance state@ParserState{pRest, pPos} = case T.uncons pRest of
+    Just (c, cs) -> ParserState{pRest = cs, pPos = movePosition pPos c}
+    Nothing -> state
+  where
+    movePosition (Position l _) '\n' = Position (l + 1) 1
+    movePosition (Position l col) _ = Position l (col + 1)
 
-consume :: Position -> T.Text -> Position
-consume = T.foldl' advance
+peek :: Parser Char
+peek = do
+    rest <- gets pRest
+    case T.uncons rest of
+        Just (c, _) -> return c
+        Nothing -> throwError (LELexerError LDUnexpectedPeek)
 
-tokenize :: T.Text -> Position -> Either LangError [Token]
-tokenize remaining position = case T.uncons remaining of
-    Just (c, cs)
-        | isSpace c -> tokenize cs (advance position c)
-        | otherwise -> do
-            following <- tokenize cs (advance position c)
-            Right $ Token (TSymbol $ T.singleton c) position : following
-    Nothing -> Right [Token TEof position]
+
+tokenize :: T.Text -> Either LangError [Token]
+tokenize code = undefined
