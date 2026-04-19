@@ -7,18 +7,17 @@ module Lexer (
     tokenize,
 ) where
 
-import Control.Monad.Trans.State (StateT)
-import Data.Char (isSpace)
-import Data.Text as T
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.Trans.Except (Except)
 import Control.Monad.Trans.State (StateT, gets, modify)
+import Data.Char (isDigit)
 import qualified Data.Text as T
+import Data.Text.Lazy (toStrict)
+import qualified Data.Text.Lazy.Builder as B
 
 data TokenData
     = TLeftParen
     | TRightParen
-    | TQuote
     | TNumber T.Text
     | TBoolean Bool
     | TString T.Text
@@ -69,6 +68,55 @@ peek = do
         Just (c, _) -> return c
         Nothing -> throwError (LELexerError LDUnexpectedPeek)
 
+expectParser :: (Char -> Bool) -> Parser ()
+expectParser predicate = do
+    rest <- gets pRest
+    case T.uncons rest of
+        Just (c, _) | predicate c -> pure ()
+        _ -> throwError (LELexerError LDNoMatch)
+
+parseLeftParen :: Parser Token
+parseLeftParen = do
+    expectParser (== '(')
+
+    pos <- gets pPos
+    modify advance
+    return $ Token TLeftParen pos
+
+parseRightParen :: Parser Token
+parseRightParen = do
+    expectParser (== ')')
+
+    pos <- gets pPos
+    modify advance
+    return $ Token TRightParen pos
+
+parseNumber :: Parser Token
+parseNumber = do
+    expectParser (\c -> isDigit c || c == '-')
+
+    pos <- gets pPos
+    numberBuilder <- consumeNumber False mempty
+    let number = toStrict $ B.toLazyText numberBuilder
+    case T.unsnoc number of
+        Just (_, lst) | isDigit lst -> return $ Token (TNumber number) pos
+        _ -> throwError (LELexerError LDInvalidNumber)
+  where
+    consumeNumber :: Bool -> B.Builder -> Parser B.Builder
+    consumeNumber sawDot acc = do
+        rest <- gets pRest
+        case T.uncons rest of
+            Just (c, _) | isDigit c -> do
+                modify advance
+                consumeNumber sawDot $ acc <> B.singleton c
+            Just ('-', _) | acc == mempty -> do
+                modify advance
+                consumeNumber False $ acc <> B.singleton '-'
+            Just ('.', _) | not sawDot -> do
+                modify advance
+                consumeNumber True $ acc <> B.singleton '.'
+            Just ('.', _) | sawDot -> throwError (LELexerError LDMultipleDotInNumber)
+            _ -> return acc
 
 tokenize :: T.Text -> Either LangError [Token]
 tokenize code = undefined
