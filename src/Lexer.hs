@@ -43,6 +43,7 @@ data LexerDetail
     = LDMultipleDotInNumber
     | LDInvalidNumber
     | LDUnexpectedPeek
+    | LDUnclosedString
     | LDNoMatch
     deriving (Show, Eq)
 
@@ -74,6 +75,20 @@ expectParser predicate = do
     case T.uncons rest of
         Just (c, _) | predicate c -> pure ()
         _ -> throwError (LELexerError LDNoMatch)
+
+isEndOfFile :: Parser Bool
+isEndOfFile = do
+    rest <- gets pRest
+    return $ T.null rest
+
+consume :: (Char -> Bool) -> B.Builder -> Parser B.Builder
+consume predicate acc = do
+    rest <- gets pRest
+    case T.uncons rest of
+        Just (c, _) | predicate c -> do
+            modify advance
+            consume predicate (acc <> B.singleton c)
+        _ -> return acc
 
 parseLeftParen :: Parser Token
 parseLeftParen = do
@@ -117,6 +132,20 @@ parseNumber = do
                 consumeNumber True $ acc <> B.singleton '.'
             Just ('.', _) | sawDot -> throwError (LELexerError LDMultipleDotInNumber)
             _ -> return acc
+
+parseString :: Parser Token
+parseString = do
+    expectParser (== '"')
+    modify advance
+
+    contentBuilder <- consume (/= '"') mempty
+    let content = toStrict $ B.toLazyText contentBuilder
+
+    isEof <- isEndOfFile
+    pos <- gets pPos
+    if isEof
+        then throwError (LELexerError LDUnclosedString)
+        else return $ Token (TString content) pos
 
 tokenize :: T.Text -> Either LangError [Token]
 tokenize code = undefined
