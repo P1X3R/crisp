@@ -10,7 +10,7 @@ module Lexer (
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.Trans.Except (Except)
 import Control.Monad.Trans.State (StateT, get, gets, modify)
-import Data.Char (isDigit)
+import Data.Char (isAlpha, isDigit)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
@@ -160,6 +160,18 @@ parseString = do
     if isEof
         then throwError (LELexerError LDUnclosedString)
         else return $ Token (TString content) pos
+
+parseSymbol :: Parser Token
+parseSymbol = do
+    expectParser isSymbolValidChar
+
+    contentBuilder <- consume isSymbolValidChar mempty
+    let content = toStrict $ B.toLazyText contentBuilder
+
+    pos <- gets pPos
+    return $ Token (TSymbol content) pos
+  where
+    isSymbolValidChar c = c `elem` ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_'] || isAlpha c
 
 tokenize :: T.Text -> Either LangError [Token]
 tokenize code = undefined
