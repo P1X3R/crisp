@@ -9,7 +9,7 @@ module Lexer (
 
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.Trans.Except (Except)
-import Control.Monad.Trans.State (StateT, gets, modify)
+import Control.Monad.Trans.State (StateT, get, gets, modify)
 import Data.Char (isDigit)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
@@ -44,6 +44,7 @@ data LexerDetail
     | LDInvalidNumber
     | LDUnexpectedPeek
     | LDUnclosedString
+    | LDInvalidBool
     | LDNoMatch
     deriving (Show, Eq)
 
@@ -132,6 +133,19 @@ parseNumber = do
                 consumeNumber True $ acc <> B.singleton '.'
             Just ('.', _) | sawDot -> throwError (LELexerError LDMultipleDotInNumber)
             _ -> return acc
+
+parseBool :: Parser Token
+parseBool = do
+    expectParser (== '#')
+    modify advance
+
+    ParserState{pRest = rest, pPos = pos} <- get
+    value <- case T.uncons rest of
+        Just ('t', _) -> return True
+        Just ('f', _) -> return False
+        _ -> throwError (LELexerError LDInvalidBool)
+
+    return $ Token (TBoolean value) pos
 
 parseString :: Parser Token
 parseString = do
