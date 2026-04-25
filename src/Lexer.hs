@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Lexer (
     TokenData (..),
@@ -11,6 +12,7 @@ import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.Trans.Except (Except)
 import Control.Monad.Trans.State (StateT, get, gets, modify)
 import Data.Char (isAlpha, isDigit)
+import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
@@ -18,6 +20,7 @@ import qualified Data.Text.Lazy.Builder as B
 data TokenData
     = TLeftParen
     | TRightParen
+    | TQuote
     | TNumber T.Text
     | TBoolean Bool
     | TString T.Text
@@ -76,6 +79,9 @@ expectParser predicate = do
     case T.uncons rest of
         Just (c, _) | predicate c -> pure ()
         _ -> throwError (LELexerError LDNoMatch)
+
+reservedKeywords :: M.Map T.Text TokenData
+reservedKeywords = M.fromList [("quote", TQuote)]
 
 isEndOfFile :: Parser Bool
 isEndOfFile = do
@@ -169,9 +175,19 @@ parseSymbol = do
     let content = toStrict $ B.toLazyText contentBuilder
 
     pos <- gets pPos
-    return $ Token (TSymbol content) pos
+    let tokenType = case M.lookup content reservedKeywords of
+            Just t -> t
+            Nothing -> TSymbol content
+
+    return $ Token tokenType pos
   where
     isSymbolValidChar c = c `elem` ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_'] || isAlpha c
+
+parseQuote :: Parser Token
+parseQuote = do
+    expectParser (== '\'')
+    pos <- gets pPos
+    return $ Token TQuote pos
 
 tokenize :: T.Text -> Either LangError [Token]
 tokenize code = undefined
