@@ -171,7 +171,9 @@ parseString = do
     pos <- gets pPos
     if isEof
         then throwError (LELexerError LDUnclosedString)
-        else return $ Token (TString content) pos
+        else do
+            modify advance
+            return $ Token (TString content) pos
 
 parseSymbol :: Parser Token
 parseSymbol = do
