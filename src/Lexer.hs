@@ -197,6 +197,7 @@ parseQuote :: Parser Token
 parseQuote = do
     expectParser (== '\'')
     pos <- gets pPos
+    modify advance
     return $ Token TQuote pos
 
 parsers :: Parser Token
