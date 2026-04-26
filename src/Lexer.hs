@@ -150,14 +150,15 @@ parseNumber = do
 parseBool :: Parser Token
 parseBool = do
     expectParser (== '#')
-    modify advance
-
     ParserState{pRest = rest, pPos = pos} <- get
+
+    modify advance -- Consume #
     value <- case T.uncons rest of
         Just ('t', _) -> return True
         Just ('f', _) -> return False
         _ -> throwError (LELexerError LDInvalidBool)
 
+    modify advance -- Consume t/f
     return $ Token (TBoolean value) pos
 
 parseString :: Parser Token
