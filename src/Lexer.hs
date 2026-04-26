@@ -128,6 +128,7 @@ parseNumber = do
     let number = toStrict $ B.toLazyText numberBuilder
     case T.unsnoc number of
         Just (_, lst) | isDigit lst -> return $ Token (TNumber number) pos
+        _ | number == "-" -> throwError (LELexerError LDNoMatch)
         _ -> throwError (LELexerError LDInvalidNumber)
   where
     consumeNumber :: Bool -> B.Builder -> Parser B.Builder
