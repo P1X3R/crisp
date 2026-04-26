@@ -164,13 +164,13 @@ parseBool = do
 parseString :: Parser Token
 parseString = do
     expectParser (== '"')
-    modify advance
+    pos <- gets pPos
 
+    modify advance
     contentBuilder <- consume (/= '"') mempty
     let content = toStrict $ B.toLazyText contentBuilder
 
     isEof <- isEndOfFile
-    pos <- gets pPos
     if isEof
         then throwError (LELexerError LDUnclosedString)
         else do
