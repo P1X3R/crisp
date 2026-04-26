@@ -6,7 +6,9 @@ module Lexer (
     TokenData (..),
     Token (..),
     Position (..),
-    tokenize,
+    Parser (..),
+    ParserState (..),
+    runTokenizer,
 ) where
 
 import Control.Applicative (Alternative, empty, (<|>))
@@ -193,8 +195,6 @@ parseQuote = do
     pos <- gets pPos
     return $ Token TQuote pos
 
-tokenize :: T.Text -> Either LangError [Token]
-tokenize code = undefined
 parsers :: Parser Token
 parsers =
     parseLeftParen
@@ -205,3 +205,27 @@ parsers =
         <|> parseString
         <|> parseSymbol
         <|> throwError (LELexerError LDInvalidSymbolChar)
+
+tokenize :: [Token] -> Parser [Token]
+tokenize acc = do
+    rest <- gets pRest
+    case T.uncons rest of
+        Just (';', _) -> do
+            _ <- consume (/= '\n') mempty
+            tokenize acc
+        Just (c, _) | isSpace c -> do
+            modify advance
+            tokenize acc
+        Nothing -> do
+            pos <- gets pPos
+            return $ Token TEof pos : acc
+        _ -> do
+            token <- parsers
+            tokenize $ token : acc
+
+runTokenizer :: String -> Either LangError [Token]
+runTokenizer input =
+    let initialState = ParserState{pRest = T.pack input, pPos = Position{pLine = 1, pColumn = 1}}
+     in case runExcept (runStateT (runParser $ tokenize []) initialState) of
+            Left err -> Left err
+            Right (tokens, _) -> Right (reverse tokens)
