@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -8,10 +9,12 @@ module Lexer (
     tokenize,
 ) where
 
-import Control.Monad.Error.Class (MonadError (throwError))
-import Control.Monad.Trans.Except (Except)
-import Control.Monad.Trans.State (StateT, get, gets, modify)
-import Data.Char (isAlpha, isDigit)
+import Control.Applicative (Alternative, empty, (<|>))
+import Control.Monad.Error.Class (MonadError (catchError, throwError))
+import Control.Monad.State (MonadState, get, gets, modify)
+import Control.Monad.Trans.Except (Except, runExcept)
+import Control.Monad.Trans.State (StateT, runStateT)
+import Data.Char (isAlpha, isDigit, isSpace)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
@@ -45,9 +48,9 @@ data LangError = LELexerError LexerDetail deriving (Show, Eq)
 data LexerDetail
     = LDMultipleDotInNumber
     | LDInvalidNumber
-    | LDUnexpectedPeek
     | LDUnclosedString
     | LDInvalidBool
+    | LDInvalidSymbolChar
     | LDNoMatch
     deriving (Show, Eq)
 
@@ -56,7 +59,15 @@ data ParserState = ParserState
     , pPos :: Position
     }
 
-type Parser a = StateT ParserState (Except LangError) a
+newtype Parser a = Parser {runParser :: StateT ParserState (Except LangError) a}
+    deriving (Functor, Applicative, Monad, MonadState ParserState, MonadError LangError)
+
+instance Alternative Parser where
+    empty = throwError (LELexerError LDNoMatch)
+    l <|> r =
+        l `catchError` \err -> case err of
+            LELexerError LDNoMatch -> r
+            _ -> throwError err
 
 advance :: ParserState -> ParserState
 advance state@ParserState{pRest, pPos} = case T.uncons pRest of
@@ -65,13 +76,6 @@ advance state@ParserState{pRest, pPos} = case T.uncons pRest of
   where
     movePosition (Position l _) '\n' = Position (l + 1) 1
     movePosition (Position l col) _ = Position l (col + 1)
-
-peek :: Parser Char
-peek = do
-    rest <- gets pRest
-    case T.uncons rest of
-        Just (c, _) -> return c
-        Nothing -> throwError (LELexerError LDUnexpectedPeek)
 
 expectParser :: (Char -> Bool) -> Parser ()
 expectParser predicate = do
@@ -191,3 +195,13 @@ parseQuote = do
 
 tokenize :: T.Text -> Either LangError [Token]
 tokenize code = undefined
+parsers :: Parser Token
+parsers =
+    parseLeftParen
+        <|> parseRightParen
+        <|> parseQuote
+        <|> parseNumber
+        <|> parseBool
+        <|> parseString
+        <|> parseSymbol
+        <|> throwError (LELexerError LDInvalidSymbolChar)
