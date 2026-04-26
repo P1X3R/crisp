@@ -180,11 +180,11 @@ parseString = do
 parseSymbol :: Parser Token
 parseSymbol = do
     expectParser isSymbolValidChar
+    pos <- gets pPos
 
     contentBuilder <- consume isSymbolValidChar mempty
     let content = toStrict $ B.toLazyText contentBuilder
 
-    pos <- gets pPos
     let tokenType = case M.lookup content reservedKeywords of
             Just t -> t
             Nothing -> TSymbol content
