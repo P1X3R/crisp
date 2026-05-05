@@ -158,9 +158,10 @@ parseNumber = do
 parseBool :: Parser Token
 parseBool = do
     expectParser (== '#')
-    ParserState{pRest = rest, pPos = pos} <- get
 
     modify advance -- Consume #
+    ParserState{pRest = rest, pPos = pos} <- get
+
     value <- case T.uncons rest of
         Just ('t', _) -> return True
         Just ('f', _) -> return False
