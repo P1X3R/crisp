@@ -188,10 +188,10 @@ parseString = do
 
 parseSymbol :: Parser Token
 parseSymbol = do
-    expectParser isSymbolValidChar
+    expectParser isSymbolStartChar
     pos <- gets pPos
 
-    contentBuilder <- consume isSymbolValidChar mempty
+    contentBuilder <- consume isSymbolBodyChar mempty
     let content = toStrict $ B.toLazyText contentBuilder
 
     let tokenType = case M.lookup content reservedKeywords of
@@ -200,7 +200,8 @@ parseSymbol = do
 
     return $ Token tokenType pos
   where
-    isSymbolValidChar c = c `elem` ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_'] || isAlpha c
+    isSymbolStartChar c = c `elem` ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_'] || isAlpha c
+    isSymbolBodyChar c = isSymbolStartChar c || isDigit c
 
 parseQuote :: Parser Token
 parseQuote = do
