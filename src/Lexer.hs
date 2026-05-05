@@ -45,7 +45,7 @@ data Token = Token
     }
     deriving (Show, Eq)
 
-data LangError = LELexerError LexerDetail deriving (Show, Eq)
+data LangError = LELexerError LexerDetail Position deriving (Show, Eq)
 
 data LexerDetail
     = LDMultipleDotInNumber
@@ -65,11 +65,19 @@ newtype Parser a = Parser {runParser :: StateT ParserState (Except LangError) a}
     deriving (Functor, Applicative, Monad, MonadState ParserState, MonadError LangError)
 
 instance Alternative Parser where
-    empty = throwError (LELexerError LDNoMatch)
+    empty = noMatch
     l <|> r =
         l `catchError` \err -> case err of
-            LELexerError LDNoMatch -> r
+            LELexerError LDNoMatch _ -> r
             _ -> throwError err
+
+throwLexError :: LexerDetail -> Parser a
+throwLexError detail = do
+    pos <- gets pPos
+    throwError (LELexerError detail pos)
+
+noMatch :: Parser a
+noMatch = throwLexError LDNoMatch
 
 advance :: ParserState -> ParserState
 advance state@ParserState{pRest, pPos} = case T.uncons pRest of
@@ -84,7 +92,7 @@ expectParser predicate = do
     rest <- gets pRest
     case T.uncons rest of
         Just (c, _) | predicate c -> pure ()
-        _ -> throwError (LELexerError LDNoMatch)
+        _ -> noMatch
 
 reservedKeywords :: M.Map T.Text TokenData
 reservedKeywords = M.fromList [("quote", TQuote)]
@@ -128,8 +136,8 @@ parseNumber = do
     let number = toStrict $ B.toLazyText numberBuilder
     case T.unsnoc number of
         Just (_, lst) | isDigit lst -> return $ Token (TNumber number) pos
-        _ | number == "-" -> throwError (LELexerError LDNoMatch)
-        _ -> throwError (LELexerError LDInvalidNumber)
+        _ | number == "-" -> noMatch
+        _ -> throwLexError LDInvalidNumber
   where
     consumeNumber :: Bool -> B.Builder -> Parser B.Builder
     consumeNumber sawDot acc = do
@@ -144,7 +152,7 @@ parseNumber = do
             Just ('.', _) | not sawDot -> do
                 modify advance
                 consumeNumber True $ acc <> B.singleton '.'
-            Just ('.', _) | sawDot -> throwError (LELexerError LDMultipleDotInNumber)
+            Just ('.', _) | sawDot -> throwLexError LDMultipleDotInNumber
             _ -> return acc
 
 parseBool :: Parser Token
@@ -156,7 +164,7 @@ parseBool = do
     value <- case T.uncons rest of
         Just ('t', _) -> return True
         Just ('f', _) -> return False
-        _ -> throwError (LELexerError LDInvalidBool)
+        _ -> throwLexError LDInvalidBool
 
     modify advance -- Consume t/f
     return $ Token (TBoolean value) pos
@@ -172,7 +180,7 @@ parseString = do
 
     isEof <- isEndOfFile
     if isEof
-        then throwError (LELexerError LDUnclosedString)
+        then throwLexError LDUnclosedString
         else do
             modify advance
             return $ Token (TString content) pos
@@ -209,7 +217,7 @@ parsers =
         <|> parseBool
         <|> parseString
         <|> parseSymbol
-        <|> throwError (LELexerError LDInvalidSymbolChar)
+        <|> throwLexError LDInvalidSymbolChar
 
 tokenize :: [Token] -> Parser [Token]
 tokenize acc = do
