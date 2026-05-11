@@ -58,3 +58,6 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - crisp
+    - hspec
+    - hedgehog
+    - hspec-hedgehog
