@@ -121,3 +121,26 @@ main = hspec $ do
                     let pairs = zip positions (drop 1 positions)
                     not (null pairs) === True
                     mapM_ (\(pos1, pos2) -> (pos1 < pos2) === True) pairs
+
+        it "property: lexer can resume tokenization from any valid atom token's starting position" $ hedgehog $ do
+            withParen <- forAll $ genProgram
+
+            -- filter out parentheses from input becuase otherwise the lexer would encounter an unclosed list
+            let input = filter (\c -> notElem c "()") withParen
+            annotateShow input
+
+            case runTokenizer input of
+                Left err -> do
+                    annotateShow err
+                    failure
+                Right t -> do
+                    let getFirst l = do
+                            (frst, _) <- uncons l
+                            Just frst
+                    let advanceUntilPos pos = advanceUntilMatch input pos (Position 1 1)
+
+                    rebuiltLists <- evalEither $ mapM (\(Token _ pos) -> runTokenizer $ advanceUntilPos pos) t
+                    rebuiltTokens <- evalMaybe $ mapM getFirst rebuiltLists
+
+                    -- only check for token data because position data in `rebuiltTokens` is always off
+                    map tData rebuiltTokens === map tData t
