@@ -41,8 +41,8 @@ maxProgramLen = 12
 
 genNumber :: Gen String
 genNumber =
-    let randInt = fmap show $ Gen.int (Range.linear minInt maxInt)
-        randFloat = fmap show $ Gen.float (Range.linearFrac minFloat maxFloat)
+    let randInt = show <$> Gen.int (Range.linear minInt maxInt)
+        randFloat = (\f -> showFFloat Nothing f "") <$> Gen.float (Range.linearFrac minFloat maxFloat)
      in Gen.choice [randInt, randFloat]
 
 genBool :: Gen String
