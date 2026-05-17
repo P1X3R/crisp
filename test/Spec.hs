@@ -109,7 +109,7 @@ main = hspec $ do
                     _ -> failure
 
         it "property: tokens' position always strictly advance" $ hedgehog $ do
-            input <- forAll $ genExpr
+            input <- forAll $ genProgram
 
             case runTokenizer input of
                 Left err -> do
