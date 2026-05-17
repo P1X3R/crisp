@@ -94,7 +94,7 @@ advanceUntilMatch code@(c : cs) pos posAcc
 main :: IO ()
 main = hspec $ do
     describe "runTokenizer" $ do
-        it "property: empty program is just eof" $ do
+        it "empty program is just eof" $ do
             runTokenizer "" `shouldBe` Right [Token TEof (Position 1 1)]
 
         it "property: tokens' position always strictly advance" $ hedgehog $ do
