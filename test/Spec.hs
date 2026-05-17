@@ -120,4 +120,4 @@ main = hspec $ do
                     let positions = map tPosition t
                     let pairs = zip positions (drop 1 positions)
                     not (null pairs) === True
-                    mapM_ (\(pos1, pos2) -> ((pColumn pos2) > (pColumn pos1) || (pLine pos2) > (pLine pos1)) === True) pairs
+                    mapM_ (\(pos1, pos2) -> (pos1 < pos2) === True) pairs

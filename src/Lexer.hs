@@ -37,7 +37,7 @@ data Position = Position
     { pLine :: Int
     , pColumn :: Int
     }
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 data Token = Token
     { tData :: TokenData
