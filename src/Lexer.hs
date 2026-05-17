@@ -163,7 +163,7 @@ parseNumber = do
             Just (c, _) | isDigit c -> do
                 modify advance
                 consumeNumber sawDot $ acc <> B.singleton c
-            Just ('-', cs) -> case T.uncons cs of
+            Just ('-', cs) | acc == mempty -> case T.uncons cs of
                 Just (c, _) | isDigit c -> do
                     modify advance
                     consumeNumber False $ acc <> B.singleton '-'
