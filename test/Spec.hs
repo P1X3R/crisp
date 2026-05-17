@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 import Data.List (intercalate, uncons)
+import qualified Data.Text as T
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -97,6 +98,12 @@ main = hspec $ do
         it "empty program is just eof" $ do
             runTokenizer "" `shouldBe` Right [Token TEof (Position 1 1)]
 
+        it "a minus sign with no digit is a symbol" $ do
+            runTokenizer "-" `shouldBe` Right [Token (TSymbol $ T.pack "-") (Position 1 1), Token TEof (Position 1 2)]
+            runTokenizer "-abc"
+                `shouldBe` Right
+                    [Token (TSymbol $ T.pack "-abc") (Position 1 1), Token TEof (Position 1 5)]
+
         it "property: valid syntax never fails" $ hedgehog $ do
             input <- forAll $ genProgram
 
@@ -167,3 +174,4 @@ main = hspec $ do
 
         it "catches invalid symbols (hits final fallback parser)" $ do
             runTokenizer "@" `shouldBe` Left (LELexerError LDInvalidSymbolChar (Position 1 1))
+
