@@ -1,7 +1,11 @@
+{-# LANGUAGE LambdaCase #-}
+
+import Data.List (intercalate, uncons)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import Lexer (ParserState (..), Position (..), Token (..), TokenData (..), runTokenizer)
+import Lexer (LangError (..), LexerDetail (..), Position (..), Token (..), TokenData (..), runTokenizer)
+import Numeric (showFFloat)
 import Test.Hspec
 import Test.Hspec.Hedgehog
 
@@ -16,7 +20,7 @@ maxFloat :: Float
 maxFloat = 1.0
 
 minStrLen :: Int
-minStrLen = 10
+minStrLen = 0
 maxStrLen :: Int
 maxStrLen = 100
 
@@ -29,6 +33,11 @@ minExprLen :: Int
 minExprLen = 0
 maxExprLen :: Int
 maxExprLen = 10
+
+minProgramLen :: Int
+minProgramLen = 1
+maxProgramLen :: Int
+maxProgramLen = 12
 
 genNumber :: Gen String
 genNumber =
@@ -56,15 +65,31 @@ genSymbol = do
 genAtom :: Gen String
 genAtom = Gen.choice [genNumber, genBool, genString, genSymbol]
 
+genList :: Gen String
+genList = (\s -> "(" <> unwords s <> ")") <$> Gen.list (Range.linear minExprLen maxExprLen) genExpr
+
+genQuote :: Gen String
+genQuote = ("'" <>) <$> genExpr
+
 genExpr :: Gen String
-genExpr =
-    Gen.recursive
-        Gen.choice
-        [ genAtom
-        ]
-        [ fmap (\s -> "(" <> unwords s <> ")") (Gen.list (Range.linear minExprLen maxExprLen) genExpr)
-        , fmap ("'" <>) genExpr
-        ]
+genExpr = Gen.recursive Gen.choice [genAtom] [genList, genQuote]
+
+genProgram :: Gen String
+genProgram = do
+    exprs <- Gen.list (Range.linear minProgramLen maxProgramLen) genExpr
+    commentsContent <- Gen.list (Range.linear minProgramLen maxProgramLen) $ Gen.string (Range.linear 0 maxStrLen) Gen.alphaNum
+    let comments = map ("; " ++) commentsContent
+    let program = zipWith (\s1 s2 -> s1 ++ "\n" ++ s2) comments exprs
+    pure $ intercalate "\n" program
+
+advanceUntilMatch :: String -> Position -> Position -> String
+advanceUntilMatch "" _ _ = ""
+advanceUntilMatch code@(c : cs) pos posAcc
+    | pos == posAcc = code
+    | otherwise = advanceUntilMatch cs pos (movePosition posAcc c)
+  where
+    movePosition (Position l _) '\n' = Position (l + 1) 1
+    movePosition (Position l col) _ = Position l (col + 1)
 
 main :: IO ()
 main = hspec $ do
