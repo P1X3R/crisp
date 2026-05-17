@@ -15,7 +15,7 @@ module Lexer (
 
 import Control.Applicative (Alternative, empty, (<|>))
 import Control.Monad.Error.Class (MonadError (catchError, throwError))
-import Control.Monad.State (MonadState, get, gets, modify)
+import Control.Monad.State (MonadState, gets, modify)
 import Control.Monad.Trans.Except (Except, runExcept)
 import Control.Monad.Trans.State (StateT, runStateT)
 import Data.Char (isAlpha, isDigit, isSpace)
@@ -116,6 +116,9 @@ consume predicate acc = do
             consume predicate (acc <> B.singleton c)
         _ -> return acc
 
+isParen :: Char -> Bool
+isParen c = elem c ['(', ')']
+
 parseLeftParen :: Parser Token
 parseLeftParen = do
     expectParser (== '(')
@@ -151,7 +154,6 @@ parseNumber = do
     let number = toStrict $ B.toLazyText numberBuilder
     case T.unsnoc number of
         Just (_, lst) | isDigit lst -> return $ Token (TNumber number) pos
-        _ | number == "-" -> noMatch
         _ -> throwLexError LDInvalidNumber
   where
     consumeNumber :: Bool -> B.Builder -> Parser B.Builder
@@ -161,21 +163,26 @@ parseNumber = do
             Just (c, _) | isDigit c -> do
                 modify advance
                 consumeNumber sawDot $ acc <> B.singleton c
-            Just ('-', _) | acc == mempty -> do
-                modify advance
-                consumeNumber False $ acc <> B.singleton '-'
+            Just ('-', cs) -> case T.uncons cs of
+                Just (c, _) | isDigit c -> do
+                    modify advance
+                    consumeNumber False $ acc <> B.singleton '-'
+                _ -> noMatch
             Just ('.', _) | not sawDot -> do
                 modify advance
                 consumeNumber True $ acc <> B.singleton '.'
             Just ('.', _) | sawDot -> throwLexError LDMultipleDotInNumber
-            _ -> return acc
+            Just (c, _) | isSpace c || isParen c -> return acc
+            Nothing -> return acc
+            _ -> throwLexError LDInvalidNumber
 
 parseBool :: Parser Token
 parseBool = do
     expectParser (== '#')
 
+    pos <- gets pPos
     modify advance -- Consume #
-    ParserState{pRest = rest, pPos = pos} <- get
+    rest <- gets pRest
 
     value <- case T.uncons rest of
         Just ('t', _) -> return True
@@ -183,6 +190,13 @@ parseBool = do
         _ -> throwLexError LDInvalidBool
 
     modify advance -- Consume t/f
+    afterBool <- gets pRest
+
+    case T.uncons afterBool of
+        Just (c, _) | isSpace c || isParen c -> pure ()
+        Nothing -> pure ()
+        _ -> throwLexError LDInvalidBool
+
     return $ Token (TBoolean value) pos
 
 parseString :: Parser Token
@@ -196,7 +210,7 @@ parseString = do
 
     isEof <- isEndOfFile
     if isEof
-        then throwLexError LDUnclosedString
+        then throwError (LELexerError LDUnclosedString pos)
         else do
             modify advance
             return $ Token (TString content) pos
