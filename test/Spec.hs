@@ -144,3 +144,26 @@ main = hspec $ do
 
                     -- only check for token data because position data in `rebuiltTokens` is always off
                     map tData rebuiltTokens === map tData t
+
+    describe "runTokenizer error handling" $ do
+        it "catches unclosed strings (hits 0% if condition)" $ do
+            runTokenizer "\"hello" `shouldBe` Left (LELexerError LDUnclosedString (Position 1 1))
+
+        it "catches multiple decimals in a number (hits unevaluated guard)" $ do
+            runTokenizer "12.34.56" `shouldBe` Left (LELexerError LDMultipleDotInNumber (Position 1 6))
+
+        it "catches numbers with leading letters" $ do
+            runTokenizer "1a" `shouldBe` Left (LELexerError LDInvalidNumber (Position 1 2))
+
+        it "catches an extra closing parenthesis" $ do
+            runTokenizer "())" `shouldBe` Left (LELexerError LDExtraParenthesis (Position 1 3))
+
+        it "catches unclosed lists at EOF" $ do
+            runTokenizer "(abc" `shouldBe` Left (LELexerError LDUnclosedList (Position 1 1))
+
+        it "catches malformed booleans" $ do
+            runTokenizer "#x" `shouldBe` Left (LELexerError LDInvalidBool (Position 1 2))
+            runTokenizer "#tabcd" `shouldBe` Left (LELexerError LDInvalidBool (Position 1 3))
+
+        it "catches invalid symbols (hits final fallback parser)" $ do
+            runTokenizer "@" `shouldBe` Left (LELexerError LDInvalidSymbolChar (Position 1 1))
