@@ -161,6 +161,8 @@ main = hspec $ do
 
         it "catches numbers with leading letters" $ do
             runTokenizer "1a" `shouldBe` Left (LELexerError LDInvalidNumber (Position 1 2))
+            runTokenizer "1-" `shouldBe` Left (LELexerError LDInvalidNumber (Position 1 2))
+            runTokenizer "1-1" `shouldBe` Left (LELexerError LDInvalidNumber (Position 1 2))
 
         it "catches an extra closing parenthesis" $ do
             runTokenizer "())" `shouldBe` Left (LELexerError LDExtraParenthesis (Position 1 3))
