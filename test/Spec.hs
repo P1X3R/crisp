@@ -97,6 +97,17 @@ main = hspec $ do
         it "empty program is just eof" $ do
             runTokenizer "" `shouldBe` Right [Token TEof (Position 1 1)]
 
+        it "property: valid syntax never fails" $ hedgehog $ do
+            input <- forAll $ genProgram
+
+            case runTokenizer input of
+                Left err -> do
+                    annotateShow err
+                    failure
+                Right t -> case last t of
+                    Token TEof _ -> success
+                    _ -> failure
+
         it "property: tokens' position always strictly advance" $ hedgehog $ do
             input <- forAll $ genExpr
 
