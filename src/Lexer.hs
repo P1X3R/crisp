@@ -8,6 +8,8 @@ module Lexer (
     Position (..),
     Parser (..),
     ParserState (..),
+    LangError (..),
+    LexerDetail (..),
     runTokenizer,
 ) where
 
