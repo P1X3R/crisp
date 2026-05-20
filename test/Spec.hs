@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-import Data.List (intercalate, uncons)
+import Data.List (intercalate, singleton, uncons)
 import qualified Data.Text as T
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -79,13 +79,16 @@ genQuote = ("'" <>) <$> genExpr
 genExpr :: Gen String
 genExpr = Gen.recursive Gen.choice [genAtom] [genList, genQuote]
 
+genCommentedExpr :: Gen String
+genCommentedExpr = do
+    comment <- Gen.string (Range.linear 0 maxStrLen) Gen.alphaNum
+    expr <- genExpr
+    return $ "; " ++ comment ++ "\n" ++ expr
+
 genProgram :: Gen String
 genProgram = do
-    exprs <- Gen.list (Range.linear minProgramLen maxProgramLen) genExpr
-    commentsContent <- Gen.list (Range.linear minProgramLen maxProgramLen) $ Gen.string (Range.linear 0 maxStrLen) Gen.alphaNum
-    let comments = map ("; " ++) commentsContent
-    let program = zipWith (\s1 s2 -> s1 ++ "\n" ++ s2) comments exprs
-    pure $ intercalate "\n" program
+    lines' <- Gen.list (Range.linear minProgramLen maxProgramLen) genCommentedExpr
+    return $ intercalate "\n" lines'
 
 advanceUntilMatch :: String -> Position -> Position -> String
 advanceUntilMatch "" _ _ = ""
