@@ -57,11 +57,15 @@ genString = do
 genSymbol :: Gen String
 genSymbol = do
     let specialSymbols = "+-*/><=!?_"
-    first <- Gen.choice [Gen.alpha, Gen.element specialSymbols]
-    rest <-
-        Gen.string (Range.linear (minSymbolLen - 1) (maxSymbolLen - 1)) $
-            Gen.choice [Gen.alphaNum, Gen.element specialSymbols]
-    pure $ first : rest
+    let nonDigit = Gen.choice [Gen.alpha, Gen.element specialSymbols]
+    let anySymbol = Gen.choice [Gen.alphaNum, Gen.element specialSymbols]
+
+    len <- Gen.int (Range.linear minSymbolLen maxSymbolLen)
+
+    -- The first two characters are not digits, the rest can be digits
+    let genList' = replicate (min 2 len) nonDigit ++ replicate (max 0 (len - 2)) anySymbol
+
+    sequence genList'
 
 genAtom :: Gen String
 genAtom = Gen.choice [genNumber, genBool, genString, genSymbol]
@@ -176,4 +180,3 @@ main = hspec $ do
 
         it "catches invalid symbols (hits final fallback parser)" $ do
             runTokenizer "@" `shouldBe` Left (LELexerError LDInvalidSymbolChar (Position 1 1))
-
