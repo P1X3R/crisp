@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Lexer (
+    NumberType (..),
     TokenData (..),
     Token (..),
     Position (..),
@@ -24,11 +25,13 @@ import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
 
+data NumberType = NTFloat | NTInt deriving (Show, Eq)
+
 data TokenData
     = TLeftParen
     | TRightParen
     | TQuote
-    | TNumber T.Text
+    | TNumber T.Text NumberType
     | TBoolean Bool
     | TString T.Text
     | TSymbol T.Text
@@ -150,30 +153,30 @@ parseNumber = do
     expectParser (\c -> isDigit c || c == '-')
 
     pos <- gets pPos
-    numberBuilder <- consumeNumber False mempty
+    (numberBuilder, numberType) <- consumeNumber False mempty
     let number = toStrict $ B.toLazyText numberBuilder
     case T.unsnoc number of
-        Just (_, lst) | isDigit lst -> return $ Token (TNumber number) pos
+        Just (_, lst) | isDigit lst -> return $ Token (TNumber number numberType) pos
         _ -> throwLexError LDInvalidNumber
   where
-    consumeNumber :: Bool -> B.Builder -> Parser B.Builder
-    consumeNumber sawDot acc = do
+    consumeNumber :: Bool -> B.Builder -> Parser (B.Builder, NumberType)
+    consumeNumber ntAcc acc = do
         rest <- gets pRest
         case T.uncons rest of
             Just (c, _) | isDigit c -> do
                 modify advance
-                consumeNumber sawDot $ acc <> B.singleton c
+                consumeNumber ntAcc $ acc <> B.singleton c
             Just ('-', cs) | acc == mempty -> case T.uncons cs of
                 Just (c, _) | isDigit c -> do
                     modify advance
                     consumeNumber False $ acc <> B.singleton '-'
                 _ -> noMatch
-            Just ('.', _) | not sawDot -> do
+            Just ('.', _) | not ntAcc -> do
                 modify advance
                 consumeNumber True $ acc <> B.singleton '.'
-            Just ('.', _) | sawDot -> throwLexError LDMultipleDotInNumber
-            Just (c, _) | isSpace c || isParen c -> return acc
-            Nothing -> return acc
+            Just ('.', _) | ntAcc -> throwLexError LDMultipleDotInNumber
+            Just (c, _) | isSpace c || isParen c -> return (acc, if ntAcc then NTFloat else NTInt)
+            Nothing -> return (acc, if ntAcc then NTFloat else NTInt)
             _ -> throwLexError LDInvalidNumber
 
 parseBool :: Parser Token
