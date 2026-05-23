@@ -54,3 +54,24 @@ peekToken = do
     case st of
         [] -> empty
         (Token t _ : _) -> return t
+
+parseAtom :: ASTParser SExpr
+parseAtom = do
+    tok <- popToken
+    case tok of
+        TNumber number NTFloat -> case TR.double number of
+            Right (parsed, _) -> return (SNumber $ NFloat parsed)
+            Left e -> throwFatalToken e (T.unpack number)
+        TNumber number NTInt -> case TR.signed TR.decimal number of
+            Right (parsed, _) -> return (SNumber $ NInt parsed)
+            Left e -> throwFatalToken e (T.unpack number)
+        TBoolean bool -> return (SBool bool)
+        TString content -> return (SStr content)
+        TSymbol name -> do
+            ASTParserState symbolId _ _ <- get
+            modify (storeId name)
+            return (SSymbol symbolId)
+        _ -> empty
+  where
+    storeId name (ASTParserState sId idToM tokens) =
+        ASTParserState (sId + 1) (M.insert sId name idToM) tokens
