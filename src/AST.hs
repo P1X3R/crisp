@@ -4,6 +4,7 @@ module AST (
     SymbolId,
     Number (..),
     SExpr (..),
+    runAST,
 ) where
 
 import Control.Applicative (Alternative (empty, (<|>)))
@@ -107,3 +108,19 @@ parseQuote = do
 
 parseToken :: ASTParser SExpr
 parseToken = parseAtom <|> parseList <|> parseQuote
+
+genAST :: [SExpr] -> ASTParser [SExpr]
+genAST acc = do
+    tok <- peekToken
+    case tok of
+        TEof -> return (reverse acc)
+        _ -> do
+            expr <- parseToken
+            genAST (expr : acc)
+
+runAST :: [Token] -> ([SExpr], M.Map SymbolId T.Text)
+runAST tokens = case (runParser []) (ASTParserState 0 M.empty tokens) of
+    Nothing -> error "fatal"
+    Just (ast, (ASTParserState _ idMap _)) -> (ast, idMap)
+  where
+    runParser = runStateT . runASTParser . genAST
