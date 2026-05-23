@@ -35,3 +35,22 @@ data SExpr
     | SList [SExpr]
     | SQuoted SExpr
     deriving (Show, Eq)
+
+throwFatalToken :: String -> String -> a
+throwFatalToken msg token = error ("Parsing token " ++ token ++ ": " ++ msg)
+
+popToken :: ASTParser TokenData
+popToken = do
+    ASTParserState currId idMap st <- get
+    case st of
+        [] -> empty
+        (Token t _ : rest) -> do
+            put (ASTParserState currId idMap rest)
+            return t
+
+peekToken :: ASTParser TokenData
+peekToken = do
+    st <- gets aTokenStream
+    case st of
+        [] -> empty
+        (Token t _ : _) -> return t
