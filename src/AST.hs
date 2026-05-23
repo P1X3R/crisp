@@ -75,3 +75,35 @@ parseAtom = do
   where
     storeId name (ASTParserState sId idToM tokens) =
         ASTParserState (sId + 1) (M.insert sId name idToM) tokens
+
+parseList :: ASTParser SExpr
+parseList = do
+    tok <- popToken
+    case tok of
+        TLeftParen -> do
+            content <- parseListContent []
+            return (SList content)
+        _ -> empty
+
+parseListContent :: [SExpr] -> ASTParser [SExpr]
+parseListContent acc = do
+    tok <- peekToken
+    case tok of
+        TRightParen -> do
+            _ <- popToken -- Consume parenthesis
+            return (reverse acc)
+        _ -> do
+            expr <- parseToken
+            parseListContent (expr : acc)
+
+parseQuote :: ASTParser SExpr
+parseQuote = do
+    tok <- popToken
+    case tok of
+        TQuote -> do
+            expr <- parseToken
+            return (SQuoted expr)
+        _ -> empty
+
+parseToken :: ASTParser SExpr
+parseToken = parseAtom <|> parseList <|> parseQuote
