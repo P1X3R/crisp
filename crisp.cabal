@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      AST
       Lexer
       Lib
   other-modules:
@@ -62,6 +63,9 @@ test-suite crisp-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ASTSpec
+      LexerSpec
+      ProgramGen
       Paths_crisp
   autogen-modules:
       Paths_crisp
