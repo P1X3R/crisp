@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module ASTSpec (spec) where
 
 import AST (Number (..), SExpr (..), SymbolId (..), runAST)
@@ -7,6 +9,9 @@ import Lexer (NumberType (..), Position (..), Token (..), TokenData (..), runTok
 import ProgramHelpers (genExpr, showSExpr)
 import Test.Hspec
 import Test.Hspec.Hedgehog
+
+pos :: Position
+pos = Position 1 1
 
 spec :: Spec
 spec = do
@@ -52,3 +57,57 @@ spec = do
             footnote $ "Printed String:  " <> srcFinal
 
             astInitial === astFinal
+
+        it "parses flat atoms successfully" $ do
+            let tokens =
+                    [ Token (TNumber "42" NTInt) pos
+                    , Token (TBoolean True) pos
+                    , Token (TString "hello") pos
+                    , Token TEof pos
+                    ]
+            let expectedAst =
+                    [ SNumber (NInt 42)
+                    , SBool True
+                    , SStr "hello"
+                    ]
+            fst (runAST tokens) `shouldBe` expectedAst
+
+        it "parses standard S-Expressions and tracks symbols" $ do
+            let tokens =
+                    [ Token TLeftParen pos
+                    , Token (TSymbol "add") pos
+                    , Token (TNumber "1.5" NTFloat) pos
+                    , Token (TNumber "2" NTInt) pos
+                    , Token TRightParen pos
+                    , Token TEof pos
+                    ]
+            let (ast, symbolMap) = runAST tokens
+
+            ast `shouldBe` [SList [SSymbol (SymbolId 0), SNumber (NFloat 1.5), SNumber (NInt 2)]]
+            M.lookup (SymbolId 0) symbolMap `shouldBe` Just "add"
+
+        it "handles nested lists correctly" $ do
+            -- ( ( 42 ) )
+            let tokens =
+                    [ Token TLeftParen pos
+                    , Token TLeftParen pos
+                    , Token (TNumber "42" NTInt) pos
+                    , Token TRightParen pos
+                    , Token TRightParen pos
+                    , Token TEof pos
+                    ]
+            let (ast, _) = runAST tokens
+            ast `shouldBe` [SList [SList [SNumber (NInt 42)]]]
+
+        it "parses quoted expressions" $ do
+            -- '(1 2)
+            let tokens =
+                    [ Token TQuote pos
+                    , Token TLeftParen pos
+                    , Token (TNumber "1" NTInt) pos
+                    , Token (TNumber "2" NTInt) pos
+                    , Token TRightParen pos
+                    , Token TEof pos
+                    ]
+            let (ast, _) = runAST tokens
+            ast `shouldBe` [SQuoted (SList [SNumber (NInt 1), SNumber (NInt 2)])]
