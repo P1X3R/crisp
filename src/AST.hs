@@ -69,7 +69,7 @@ parseAtom = do
         TBoolean bool -> return (SBool bool)
         TString content -> return (SStr content)
         TSymbol name -> do
-            ASTParserState symbolId _ _ <- get
+            symbolId <- gets aCurrentId
             modify (storeId name)
             return (SSymbol symbolId)
         _ -> empty
@@ -120,7 +120,7 @@ genAST acc = do
 
 runAST :: [Token] -> ([SExpr], M.Map SymbolId T.Text)
 runAST tokens = case (runParser []) (ASTParserState 0 M.empty tokens) of
-    Nothing -> error "fatal"
+    Nothing -> error "fatal: Parsing failed structural validation"
     Just (ast, (ASTParserState _ idMap _)) -> (ast, idMap)
   where
     runParser = runStateT . runASTParser . genAST
