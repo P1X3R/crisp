@@ -1,8 +1,13 @@
-module ProgramGen (
+module ProgramHelpers (
     genProgram,
+    genExpr,
+    showSExpr
 ) where
 
+import AST (Number (..), SExpr (..), SymbolId)
 import Data.List (intercalate)
+import qualified Data.Map as M
+import qualified Data.Text as T
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -87,3 +92,20 @@ genProgram :: Gen String
 genProgram = do
     lines' <- Gen.list (Range.linear minProgramLen maxProgramLen) genCommentedExpr
     return $ intercalate "\n" lines'
+
+showSExpr :: SExpr -> M.Map SymbolId T.Text -> Maybe String
+showSExpr (SNumber (NFloat num)) _ = Just $ showFFloat Nothing num ""
+showSExpr (SNumber (NInt num)) _ = Just $ show num
+showSExpr (SBool bool) _ = Just $ case bool of
+  True -> "#t"
+  False -> "#f"
+showSExpr (SStr content) _ = Just $ "\"" <> T.unpack content <> "\""
+showSExpr (SSymbol sId) idMap = do
+    name <- M.lookup sId idMap
+    Just $ T.unpack name
+showSExpr (SList elements) idMap = do
+    content <- mapM (\e -> showSExpr e idMap) elements
+    Just $ "(" <> unwords content <> ")"
+showSExpr (SQuoted expr) idMap = do
+    quoted <- showSExpr expr idMap
+    Just $ "'" <> quoted

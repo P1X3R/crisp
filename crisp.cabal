@@ -65,7 +65,7 @@ test-suite crisp-test
   other-modules:
       ASTSpec
       LexerSpec
-      ProgramGen
+      ProgramHelpers
       Paths_crisp
   autogen-modules:
       Paths_crisp

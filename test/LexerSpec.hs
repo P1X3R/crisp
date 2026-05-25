@@ -6,7 +6,7 @@ import Data.List (uncons)
 import qualified Data.Text as T
 import Hedgehog
 import Lexer (LangError (..), LexerDetail (..), Position (..), Token (..), TokenData (..), runTokenizer)
-import ProgramGen (genProgram)
+import ProgramHelpers (genProgram)
 import Test.Hspec
 import Test.Hspec.Hedgehog
 
@@ -80,10 +80,10 @@ spec = do
                     map tData rebuiltTokens === map tData t
 
     describe "runTokenizer error handling" $ do
-        it "catches unclosed strings (hits 0% if condition)" $ do
+        it "catches unclosed strings" $ do
             runTokenizer "\"hello" `shouldBe` Left (LELexerError LDUnclosedString (Position 1 1))
 
-        it "catches multiple decimals in a number (hits unevaluated guard)" $ do
+        it "catches multiple decimals in a number" $ do
             runTokenizer "12.34.56" `shouldBe` Left (LELexerError LDMultipleDotInNumber (Position 1 6))
 
         it "catches numbers with leading letters" $ do
