@@ -1,14 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module AST (
-    SymbolId,
+    SymbolId (..),
     Number (..),
     SExpr (..),
     runAST,
 ) where
 
 import Control.Applicative (Alternative (empty, (<|>)))
-import Control.Monad.State.Strict (MonadState (get, put), StateT (runStateT), gets, modify)
+import Control.Monad.State.Strict (MonadState, StateT (runStateT), gets, modify)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
@@ -42,11 +42,11 @@ throwFatalToken msg token = error ("Parsing token " ++ token ++ ": " ++ msg)
 
 popToken :: ASTParser TokenData
 popToken = do
-    ASTParserState currId idMap st <- get
+    st <- gets aTokenStream
     case st of
         [] -> empty
         (Token t _ : rest) -> do
-            put (ASTParserState currId idMap rest)
+            modify (\s -> s{aTokenStream = rest})
             return t
 
 peekToken :: ASTParser TokenData
