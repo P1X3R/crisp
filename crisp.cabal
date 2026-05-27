@@ -30,6 +30,7 @@ library
       AST
       Lexer
       Lib
+      Location
   other-modules:
       Paths_crisp
   autogen-modules:

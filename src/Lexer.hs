@@ -4,7 +4,6 @@
 
 module Lexer (
     NumberType (..),
-    TokenData (..),
     Token (..),
     Position (..),
     Parser (..),
@@ -24,10 +23,11 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
+import Location (Position (..), Located (..))
 
 data NumberType = NTFloat | NTInt deriving (Show, Eq)
 
-data TokenData
+data Token
     = TLeftParen
     | TRightParen
     | TQuote
@@ -36,18 +36,6 @@ data TokenData
     | TString T.Text
     | TSymbol T.Text
     | TEof
-    deriving (Show, Eq)
-
-data Position = Position
-    { pLine :: Int
-    , pColumn :: Int
-    }
-    deriving (Show, Eq, Ord)
-
-data Token = Token
-    { tData :: TokenData
-    , tPosition :: Position
-    }
     deriving (Show, Eq)
 
 data LangError = LELexerError LexerDetail Position deriving (Show, Eq)
@@ -102,7 +90,7 @@ expectParser predicate = do
         Just (c, _) | predicate c -> pure ()
         _ -> noMatch
 
-reservedKeywords :: M.Map T.Text TokenData
+reservedKeywords :: M.Map T.Text Token
 reservedKeywords = M.fromList [("quote", TQuote)]
 
 isEndOfFile :: Parser Bool
@@ -122,7 +110,7 @@ consume predicate acc = do
 isParen :: Char -> Bool
 isParen c = elem c ['(', ')']
 
-parseLeftParen :: Parser Token
+parseLeftParen :: Parser (Located Token)
 parseLeftParen = do
     expectParser (== '(')
 
@@ -133,9 +121,9 @@ parseLeftParen = do
             }
 
     modify advance
-    return $ Token TLeftParen pos
+    return $ Located TLeftParen pos
 
-parseRightParen :: Parser Token
+parseRightParen :: Parser (Located Token)
 parseRightParen = do
     expectParser (== ')')
 
@@ -146,9 +134,9 @@ parseRightParen = do
 
     pos <- gets pPos
     modify advance
-    return $ Token TRightParen pos
+    return $ Located TRightParen pos
 
-parseNumber :: Parser Token
+parseNumber :: Parser (Located Token)
 parseNumber = do
     expectParser (\c -> isDigit c || c == '-')
 
@@ -156,7 +144,7 @@ parseNumber = do
     (numberBuilder, numberType) <- consumeNumber False mempty
     let number = toStrict $ B.toLazyText numberBuilder
     case T.unsnoc number of
-        Just (_, lst) | isDigit lst -> return $ Token (TNumber number numberType) pos
+        Just (_, lst) | isDigit lst -> return $ Located (TNumber number numberType) pos
         _ -> throwLexError LDInvalidNumber
   where
     consumeNumber :: Bool -> B.Builder -> Parser (B.Builder, NumberType)
@@ -179,7 +167,7 @@ parseNumber = do
             Nothing -> return (acc, if ntAcc then NTFloat else NTInt)
             _ -> throwLexError LDInvalidNumber
 
-parseBool :: Parser Token
+parseBool :: Parser (Located Token)
 parseBool = do
     expectParser (== '#')
 
@@ -200,9 +188,9 @@ parseBool = do
         Nothing -> pure ()
         _ -> throwLexError LDInvalidBool
 
-    return $ Token (TBoolean value) pos
+    return $ Located (TBoolean value) pos
 
-parseString :: Parser Token
+parseString :: Parser (Located Token)
 parseString = do
     expectParser (== '"')
     pos <- gets pPos
@@ -216,9 +204,9 @@ parseString = do
         then throwError (LELexerError LDUnclosedString pos)
         else do
             modify advance
-            return $ Token (TString content) pos
+            return $ Located (TString content) pos
 
-parseSymbol :: Parser Token
+parseSymbol :: Parser (Located Token)
 parseSymbol = do
     expectParser isSymbolStartChar
     pos <- gets pPos
@@ -230,19 +218,19 @@ parseSymbol = do
             Just t -> t
             Nothing -> TSymbol content
 
-    return $ Token tokenType pos
+    return $ Located tokenType pos
   where
     isSymbolStartChar c = c `elem` ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_'] || isAlpha c
     isSymbolBodyChar c = isSymbolStartChar c || isDigit c
 
-parseQuote :: Parser Token
+parseQuote :: Parser (Located Token)
 parseQuote = do
     expectParser (== '\'')
     pos <- gets pPos
     modify advance
-    return $ Token TQuote pos
+    return $ Located TQuote pos
 
-parsers :: Parser Token
+parsers :: Parser (Located Token)
 parsers =
     parseLeftParen
         <|> parseRightParen
@@ -253,7 +241,7 @@ parsers =
         <|> parseSymbol
         <|> throwLexError LDInvalidSymbolChar
 
-tokenize :: [Token] -> Parser [Token]
+tokenize :: [Located Token] -> Parser [Located Token]
 tokenize acc = do
     rest <- gets pRest
     case T.uncons rest of
@@ -267,13 +255,13 @@ tokenize acc = do
             positions <- gets pListStack
             pos <- gets pPos
             case positions of
-                [] -> return $ Token TEof pos : acc
+                [] -> return $ Located TEof pos : acc
                 (frst : _) -> throwError (LELexerError LDUnclosedList frst)
         _ -> do
             token <- parsers
             tokenize $ token : acc
 
-runTokenizer :: String -> Either LangError [Token]
+runTokenizer :: String -> Either LangError [Located Token]
 runTokenizer input =
     let initialState =
             ParserState

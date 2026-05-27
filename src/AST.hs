@@ -12,7 +12,8 @@ import Control.Monad.State.Strict (MonadState, StateT (runStateT), gets, modify)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
-import Lexer (NumberType (..), Token (..), TokenData (..))
+import Lexer (NumberType (..), Token (..))
+import Location (Located (..))
 
 newtype SymbolId = SymbolId {getId :: Int} deriving (Show, Eq, Ord, Num)
 
@@ -22,7 +23,7 @@ newtype ASTParser a = Parser {runASTParser :: StateT ASTParserState Maybe a}
 data ASTParserState = ASTParserState
     { aCurrentId :: SymbolId
     , aIdNameMap :: M.Map SymbolId T.Text
-    , aTokenStream :: [Token]
+    , aTokenStream :: [Located Token]
     }
     deriving (Show, Eq)
 
@@ -33,62 +34,62 @@ data SExpr
     | SBool Bool
     | SStr T.Text
     | SSymbol SymbolId
-    | SList [SExpr]
-    | SQuoted SExpr
+    | SList [Located SExpr]
+    | SQuoted (Located SExpr)
     deriving (Show, Eq)
 
 throwFatalToken :: String -> String -> a
 throwFatalToken msg token = error ("Parsing token " ++ token ++ ": " ++ msg)
 
-popToken :: ASTParser TokenData
+popToken :: ASTParser (Located Token)
 popToken = do
     st <- gets aTokenStream
     case st of
         [] -> empty
-        (Token t _ : rest) -> do
+        (t : rest) -> do
             modify (\s -> s{aTokenStream = rest})
             return t
 
-peekToken :: ASTParser TokenData
+peekToken :: ASTParser (Located Token)
 peekToken = do
     st <- gets aTokenStream
     case st of
         [] -> empty
-        (Token t _ : _) -> return t
+        (t : _) -> return t
 
-parseAtom :: ASTParser SExpr
+parseAtom :: ASTParser (Located SExpr)
 parseAtom = do
-    tok <- popToken
+    Located tok pos <- popToken
     case tok of
         TNumber number NTFloat -> case TR.double number of
-            Right (parsed, _) -> return (SNumber $ NFloat parsed)
+            Right (parsed, _) -> return $ Located (SNumber $ NFloat parsed) pos
             Left e -> throwFatalToken e (T.unpack number)
         TNumber number NTInt -> case TR.signed TR.decimal number of
-            Right (parsed, _) -> return (SNumber $ NInt parsed)
+            Right (parsed, _) -> return $ Located (SNumber $ NInt parsed) pos
             Left e -> throwFatalToken e (T.unpack number)
-        TBoolean bool -> return (SBool bool)
-        TString content -> return (SStr content)
+        TBoolean bool -> return $ Located (SBool bool) pos
+        TString content -> return $ Located (SStr content) pos
         TSymbol name -> do
             symbolId <- gets aCurrentId
             modify (storeId name)
-            return (SSymbol symbolId)
+            return $ Located (SSymbol symbolId) pos
         _ -> empty
   where
     storeId name (ASTParserState sId idToM tokens) =
         ASTParserState (sId + 1) (M.insert sId name idToM) tokens
 
-parseList :: ASTParser SExpr
+parseList :: ASTParser (Located SExpr)
 parseList = do
-    tok <- popToken
+    Located tok pos <- popToken
     case tok of
         TLeftParen -> do
             content <- parseListContent []
-            return (SList content)
+            return $ Located (SList content) pos
         _ -> empty
 
-parseListContent :: [SExpr] -> ASTParser [SExpr]
+parseListContent :: [Located SExpr] -> ASTParser [Located SExpr]
 parseListContent acc = do
-    tok <- peekToken
+    Located tok _ <- peekToken
     case tok of
         TRightParen -> do
             _ <- popToken -- Consume parenthesis
@@ -97,28 +98,28 @@ parseListContent acc = do
             expr <- parseToken
             parseListContent (expr : acc)
 
-parseQuote :: ASTParser SExpr
+parseQuote :: ASTParser (Located SExpr)
 parseQuote = do
-    tok <- popToken
+    Located tok pos <- popToken
     case tok of
         TQuote -> do
             expr <- parseToken
-            return (SQuoted expr)
+            return $ Located (SQuoted expr) pos
         _ -> empty
 
-parseToken :: ASTParser SExpr
+parseToken :: ASTParser (Located SExpr)
 parseToken = parseAtom <|> parseList <|> parseQuote
 
-genAST :: [SExpr] -> ASTParser [SExpr]
+genAST :: [Located SExpr] -> ASTParser [Located SExpr]
 genAST acc = do
-    tok <- peekToken
+    Located tok _ <- peekToken
     case tok of
         TEof -> return (reverse acc)
         _ -> do
             expr <- parseToken
             genAST (expr : acc)
 
-runAST :: [Token] -> ([SExpr], M.Map SymbolId T.Text)
+runAST :: [Located Token] -> ([Located SExpr], M.Map SymbolId T.Text)
 runAST tokens = case (runParser []) (ASTParserState 0 M.empty tokens) of
     Nothing -> error "fatal: Parsing failed structural validation"
     Just (ast, (ASTParserState _ idMap _)) -> (ast, idMap)

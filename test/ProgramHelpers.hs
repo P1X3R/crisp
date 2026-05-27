@@ -12,6 +12,7 @@ import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Numeric (showFFloat)
+import Location (Located (..))
 
 minInt :: Int
 minInt = -100
@@ -104,8 +105,8 @@ showSExpr (SSymbol sId) idMap = do
     name <- M.lookup sId idMap
     Just $ T.unpack name
 showSExpr (SList elements) idMap = do
-    content <- mapM (\e -> showSExpr e idMap) elements
+    content <- mapM (\(Located e _) -> showSExpr e idMap) elements
     Just $ "(" <> unwords content <> ")"
-showSExpr (SQuoted expr) idMap = do
+showSExpr (SQuoted (Located expr _)) idMap = do
     quoted <- showSExpr expr idMap
     Just $ "'" <> quoted

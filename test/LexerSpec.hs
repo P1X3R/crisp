@@ -5,10 +5,11 @@ module LexerSpec (spec) where
 import Data.List (uncons)
 import qualified Data.Text as T
 import Hedgehog
-import Lexer (LangError (..), LexerDetail (..), Position (..), Token (..), TokenData (..), runTokenizer)
+import Lexer (LangError (..), LexerDetail (..), Position (..), Token (..), runTokenizer)
 import ProgramHelpers (genProgram)
 import Test.Hspec
 import Test.Hspec.Hedgehog
+import Location (Located(..))
 
 advanceUntilMatch :: String -> Position -> Position -> String
 advanceUntilMatch "" _ _ = ""
@@ -23,13 +24,13 @@ spec :: Spec
 spec = do
     describe "runTokenizer" $ do
         it "empty program is just eof" $ do
-            runTokenizer "" `shouldBe` Right [Token TEof (Position 1 1)]
+            runTokenizer "" `shouldBe` Right [Located TEof (Position 1 1)]
 
         it "a minus sign with no digit is a symbol" $ do
-            runTokenizer "-" `shouldBe` Right [Token (TSymbol $ T.pack "-") (Position 1 1), Token TEof (Position 1 2)]
+            runTokenizer "-" `shouldBe` Right [Located (TSymbol $ T.pack "-") (Position 1 1), Located TEof (Position 1 2)]
             runTokenizer "-abc"
                 `shouldBe` Right
-                    [Token (TSymbol $ T.pack "-abc") (Position 1 1), Token TEof (Position 1 5)]
+                    [Located (TSymbol $ T.pack "-abc") (Position 1 1), Located TEof (Position 1 5)]
 
         it "property: valid syntax never fails" $ hedgehog $ do
             input <- forAll $ genProgram
@@ -39,7 +40,7 @@ spec = do
                     annotateShow err
                     failure
                 Right t -> case last t of
-                    Token TEof _ -> success
+                    Located TEof _ -> success
                     _ -> failure
 
         it "property: tokens' position always strictly advance" $ hedgehog $ do
@@ -51,7 +52,7 @@ spec = do
                     failure
                 Right t -> do
                     annotateShow t
-                    let positions = map tPosition t
+                    let positions = map lPosition t
                     let pairs = zip positions (drop 1 positions)
                     not (null pairs) === True
                     mapM_ (\(pos1, pos2) -> (pos1 < pos2) === True) pairs
@@ -73,11 +74,11 @@ spec = do
                             Just frst
                     let advanceUntilPos pos = advanceUntilMatch input pos (Position 1 1)
 
-                    rebuiltLists <- evalEither $ mapM (\(Token _ pos) -> runTokenizer $ advanceUntilPos pos) t
+                    rebuiltLists <- evalEither $ mapM (\(Located _ pos) -> runTokenizer $ advanceUntilPos pos) t
                     rebuiltTokens <- evalMaybe $ mapM getFirst rebuiltLists
 
                     -- only check for token data because position data in `rebuiltTokens` is always off
-                    map tData rebuiltTokens === map tData t
+                    map unLocated rebuiltTokens === map unLocated t
 
     describe "runTokenizer error handling" $ do
         it "catches unclosed strings" $ do
