@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ASTSpec (spec) where
@@ -5,6 +6,7 @@ module ASTSpec (spec) where
 import AST (Number (..), SExpr (..), SymbolId (..), runAST)
 import qualified Data.Map as M
 import Hedgehog
+import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..), runTokenizer)
 import Location (Located (..), Position (..))
 import ProgramHelpers (genExpr, showSExpr)
@@ -27,7 +29,7 @@ spec = do
             tokInitial <- case runTokenizer srcInitial of
                 Left err -> annotateShow err >> failure
                 Right tok -> return tok
-            let (astListInitial, idMapInitial) = runAST tokInitial
+            (astListInitial, idMapInitial) <- evalEither $ runAST tokInitial
             astInitial <- case astListInitial of
                 [ast] -> return ast
                 [] -> footnote "Parser returned an empty AST list" >> failure
@@ -50,7 +52,7 @@ spec = do
                     footnoteShow astInitial
                     failure
                 Right tok -> return tok
-            let (astListFinal, _) = runAST tokFinal
+            (astListFinal, _) <- evalEither $ runAST tokFinal
             astFinal <- case astListFinal of
                 [ast] -> return ast
                 [] -> footnote "Second pass returned an empty AST list" >> failure
@@ -75,9 +77,11 @@ spec = do
                     , Located (SBool True) pos
                     , Located (SStr "hello") pos
                     ]
-            fst (runAST tokens) `shouldBe` expectedAst
+
+            runAST tokens `shouldBe` Right (expectedAst, M.empty)
 
         it "parses standard S-Expressions and tracks symbols" $ do
+            -- (add 1.5 2)
             let tokens =
                     locate
                         [ TLeftParen
@@ -87,19 +91,19 @@ spec = do
                         , TRightParen
                         , TEof
                         ]
-            let (ast, symbolMap) = runAST tokens
+            let expectedAST =
+                    [ Located
+                        ( SList
+                            [ Located (SSymbol (SymbolId 0)) pos
+                            , Located (SNumber (NFloat 1.5)) pos
+                            , Located (SNumber (NInt 2)) pos
+                            ]
+                        )
+                        pos
+                    ]
+            let expectedIdMap = M.fromList [(SymbolId 0, "add")]
 
-            ast
-                `shouldBe` [ Located
-                                ( SList
-                                    [ Located (SSymbol (SymbolId 0)) pos
-                                    , Located (SNumber (NFloat 1.5)) pos
-                                    , Located (SNumber (NInt 2)) pos
-                                    ]
-                                )
-                                pos
-                           ]
-            M.lookup (SymbolId 0) symbolMap `shouldBe` Just "add"
+            runAST tokens `shouldBe` Right (expectedAST, expectedIdMap)
 
         it "handles nested lists correctly" $ do
             -- ( ( 42 ) )
@@ -112,8 +116,9 @@ spec = do
                         , TRightParen
                         , TEof
                         ]
-            let (ast, _) = runAST tokens
-            ast `shouldBe` [Located (SList [Located (SList [Located (SNumber (NInt 42)) pos]) pos]) pos]
+            let expectedAST = [Located (SList [Located (SList [Located (SNumber (NInt 42)) pos]) pos]) pos]
+
+            runAST tokens `shouldBe` Right (expectedAST, M.empty)
 
         it "parses quoted expressions" $ do
             -- '(1 2)
@@ -126,5 +131,41 @@ spec = do
                         , TRightParen
                         , TEof
                         ]
-            let (ast, _) = runAST tokens
-            ast `shouldBe` [Located (SQuoted (Located (SList [Located (SNumber (NInt 1)) pos, Located (SNumber (NInt 2)) pos]) pos)) pos]
+            let expectedAST = [Located (SQuoted (Located (SList [Located (SNumber (NInt 1)) pos, Located (SNumber (NInt 2)) pos]) pos)) pos]
+
+            runAST tokens `shouldBe` Right (expectedAST, M.empty)
+
+    describe "runAST error handling" $ do
+        it "catches unclised lists" $ do
+            -- (abc
+            let tokens =
+                    locate
+                        [ TLeftParen
+                        , TSymbol "abc"
+                        , TEof
+                        ]
+
+            runAST tokens `shouldBe` Left (LEASTError PDUnclosedList pos)
+
+        it "catches extra parenthesis" $ do
+            -- ())
+            let tokens =
+                    locate
+                        [ TLeftParen
+                        , TRightParen
+                        , TRightParen
+                        , TEof
+                        ]
+
+            runAST tokens `shouldBe` Left (LEASTError PDExtraParenthesis pos)
+
+        it "catches empty quote" $ do
+            -- ''
+            let tokens =
+                    locate
+                        [ TQuote
+                        , TQuote
+                        , TEof
+                        ]
+
+            runAST tokens `shouldBe` Left (LEASTError PDEmptyQuote pos)

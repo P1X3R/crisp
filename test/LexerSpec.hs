@@ -93,12 +93,6 @@ spec = do
             runTokenizer "1-" `shouldBe` Left (LELexerError LDInvalidNumber (Position 1 2))
             runTokenizer "1-1" `shouldBe` Left (LELexerError LDInvalidNumber (Position 1 2))
 
-        it "catches an extra closing parenthesis" $ do
-            runTokenizer "())" `shouldBe` Left (LELexerError LDExtraParenthesis (Position 1 3))
-
-        it "catches unclosed lists at EOF" $ do
-            runTokenizer "(abc" `shouldBe` Left (LELexerError LDUnclosedList (Position 1 1))
-
         it "catches malformed booleans" $ do
             runTokenizer "#x" `shouldBe` Left (LELexerError LDInvalidBool (Position 1 2))
             runTokenizer "#tabcd" `shouldBe` Left (LELexerError LDInvalidBool (Position 1 3))

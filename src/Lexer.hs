@@ -20,8 +20,8 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
-import Location (Position (..), Located (..))
 import LanguageError (LangError (..), LexerDetail (..))
+import Location (Located (..), Position (..))
 
 data NumberType = NTFloat | NTInt deriving (Show, Eq)
 
@@ -39,7 +39,6 @@ data Token
 data ParserState = ParserState
     { pRest :: T.Text
     , pPos :: Position
-    , pListStack :: [Position]
     }
 
 newtype Parser a = Parser {runParser :: StateT ParserState (Except LangError) a}
@@ -61,8 +60,8 @@ noMatch :: Parser a
 noMatch = throwLexError LDNoMatch
 
 advance :: ParserState -> ParserState
-advance state@ParserState{pRest, pPos, pListStack} = case T.uncons pRest of
-    Just (c, cs) -> ParserState{pRest = cs, pPos = movePosition pPos c, pListStack}
+advance state@ParserState{pRest, pPos} = case T.uncons pRest of
+    Just (c, cs) -> ParserState{pRest = cs, pPos = movePosition pPos c}
     Nothing -> state
   where
     movePosition (Position l _) '\n' = Position (l + 1) 1
@@ -100,22 +99,12 @@ parseLeftParen = do
     expectParser (== '(')
 
     pos <- gets pPos
-    modify $ \state ->
-        state
-            { pListStack = pos : pListStack state
-            }
-
     modify advance
     return $ Located TLeftParen pos
 
 parseRightParen :: Parser (Located Token)
 parseRightParen = do
     expectParser (== ')')
-
-    positions <- gets pListStack
-    case positions of
-        [] -> throwLexError LDExtraParenthesis
-        (_ : ps) -> modify $ \state -> state{pListStack = ps}
 
     pos <- gets pPos
     modify advance
@@ -237,23 +226,15 @@ tokenize acc = do
             modify advance
             tokenize acc
         Nothing -> do
-            positions <- gets pListStack
             pos <- gets pPos
-            case positions of
-                [] -> return $ Located TEof pos : acc
-                (frst : _) -> throwError (LELexerError LDUnclosedList frst)
+            return $ Located TEof pos : acc
         _ -> do
             token <- parsers
             tokenize $ token : acc
 
 runTokenizer :: String -> Either LangError [Located Token]
-runTokenizer input =
-    let initialState =
-            ParserState
-                { pRest = T.pack input
-                , pPos = Position{pLine = 1, pColumn = 1}
-                , pListStack = []
-                }
-     in case runExcept (runStateT (runParser $ tokenize []) initialState) of
-            Left err -> Left err
-            Right (tokens, _) -> Right (reverse tokens)
+runTokenizer input = do
+    (tokens, _) <- runExcept ((run []) (ParserState (T.pack input) (Position 1 1)))
+    return $ reverse tokens
+  where
+    run = runStateT . runParser . tokenize
