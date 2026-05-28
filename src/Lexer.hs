@@ -5,11 +5,8 @@
 module Lexer (
     NumberType (..),
     Token (..),
-    Position (..),
     Parser (..),
     ParserState (..),
-    LangError (..),
-    LexerDetail (..),
     runTokenizer,
 ) where
 
@@ -24,6 +21,7 @@ import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
 import Location (Position (..), Located (..))
+import LanguageError (LangError (..), LexerDetail (..))
 
 data NumberType = NTFloat | NTInt deriving (Show, Eq)
 
@@ -36,19 +34,6 @@ data Token
     | TString T.Text
     | TSymbol T.Text
     | TEof
-    deriving (Show, Eq)
-
-data LangError = LELexerError LexerDetail Position deriving (Show, Eq)
-
-data LexerDetail
-    = LDMultipleDotInNumber
-    | LDInvalidNumber
-    | LDUnclosedString
-    | LDInvalidBool
-    | LDInvalidSymbolChar
-    | LDUnclosedList
-    | LDExtraParenthesis
-    | LDNoMatch
     deriving (Show, Eq)
 
 data ParserState = ParserState

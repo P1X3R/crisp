@@ -5,11 +5,12 @@ module LexerSpec (spec) where
 import Data.List (uncons)
 import qualified Data.Text as T
 import Hedgehog
-import Lexer (LangError (..), LexerDetail (..), Position (..), Token (..), runTokenizer)
+import Lexer (Token (..), runTokenizer)
+import LanguageError (LangError (..), LexerDetail (..))
 import ProgramHelpers (genProgram)
 import Test.Hspec
 import Test.Hspec.Hedgehog
-import Location (Located(..))
+import Location (Located(..), Position (..))
 
 advanceUntilMatch :: String -> Position -> Position -> String
 advanceUntilMatch "" _ _ = ""
