@@ -16,7 +16,7 @@ import Control.Monad.State (MonadState, gets, modify)
 import Control.Monad.Trans.Except (Except, runExcept)
 import Control.Monad.Trans.State (StateT, runStateT)
 import Data.Char (isAlpha, isDigit, isSpace)
-import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
@@ -74,8 +74,8 @@ expectParser predicate = do
         Just (c, _) | predicate c -> pure ()
         _ -> noMatch
 
-reservedKeywords :: M.Map T.Text Token
-reservedKeywords = M.fromList [("quote", TQuote)]
+reservedKeywords :: HM.HashMap T.Text Token
+reservedKeywords = HM.fromList [("quote", TQuote)]
 
 isEndOfFile :: Parser Bool
 isEndOfFile = do
@@ -188,7 +188,7 @@ parseSymbol = do
     contentBuilder <- consume isSymbolBodyChar mempty
     let content = toStrict $ B.toLazyText contentBuilder
 
-    let tokenType = case M.lookup content reservedKeywords of
+    let tokenType = case HM.lookup content reservedKeywords of
             Just t -> t
             Nothing -> TSymbol content
 

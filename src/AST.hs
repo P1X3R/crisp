@@ -9,8 +9,10 @@ module AST (
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad.Except (Except, MonadError (catchError, throwError), runExcept)
-import Control.Monad.State.Strict (MonadState, StateT (runStateT), gets, modify)
-import qualified Data.Map as M
+import Control.Monad.State.Strict (MonadState (get, put), StateT (runStateT), gets, modify)
+import Data.Bits (Bits (xor))
+import qualified Data.HashMap.Strict as HM
+import Data.Hashable (Hashable (..))
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
 import LanguageError (ASTDetail (..), LangError (..))
@@ -24,7 +26,7 @@ newtype ASTParser a = Parser {runASTParser :: StateT ASTParserState (Except Lang
 
 data ASTParserState = ASTParserState
     { aCurrentId :: SymbolId
-    , aIdNameMap :: M.Map SymbolId T.Text
+    , aIdNameMap :: HM.HashMap SymbolId T.Text
     , aTokenStream :: [Located Token]
     }
     deriving (Show, Eq)
@@ -39,6 +41,10 @@ data SExpr
     | SList [Located SExpr]
     | SQuoted (Located SExpr)
     deriving (Show, Eq)
+
+instance Hashable SymbolId where
+    hash (SymbolId sId) = sId
+    hashWithSalt salt (SymbolId sId) = salt `xor` sId -- unused
 
 instance Alternative ASTParser where
     empty = throwError (LEASTError PDNoMatch (Position 1 1))
@@ -131,9 +137,9 @@ genAST acc = do
             expr <- parseToken
             genAST (expr : acc)
 
-runAST :: [Located Token] -> Either LangError ([Located SExpr], M.Map SymbolId T.Text)
+runAST :: [Located Token] -> Either LangError ([Located SExpr], HM.HashMap SymbolId T.Text)
 runAST tokens = do
-    (ast, (ASTParserState _ idMap _)) <- runExcept $ (runParser []) (ASTParserState 0 M.empty tokens)
+    (ast, (ASTParserState _ idMap _)) <- runExcept $ (runParser []) (ASTParserState 0 HM.empty tokens)
     Right (ast, idMap)
   where
     runParser = runStateT . runASTParser . genAST

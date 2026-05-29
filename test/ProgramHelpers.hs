@@ -6,7 +6,7 @@ module ProgramHelpers (
 
 import AST (Number (..), SExpr (..), SymbolId)
 import Data.List (intercalate)
-import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -94,7 +94,7 @@ genProgram = do
     lines' <- Gen.list (Range.linear minProgramLen maxProgramLen) genCommentedExpr
     return $ intercalate "\n" lines'
 
-showSExpr :: SExpr -> M.Map SymbolId T.Text -> Maybe String
+showSExpr :: SExpr -> HM.HashMap SymbolId T.Text -> Maybe String
 showSExpr (SNumber (NFloat num)) _ = Just $ showFFloat Nothing num ""
 showSExpr (SNumber (NInt num)) _ = Just $ show num
 showSExpr (SBool bool) _ = Just $ case bool of
@@ -102,7 +102,7 @@ showSExpr (SBool bool) _ = Just $ case bool of
   False -> "#f"
 showSExpr (SStr content) _ = Just $ "\"" <> T.unpack content <> "\""
 showSExpr (SSymbol sId) idMap = do
-    name <- M.lookup sId idMap
+    name <- HM.lookup sId idMap
     Just $ T.unpack name
 showSExpr (SList elements) idMap = do
     content <- mapM (\(Located e _) -> showSExpr e idMap) elements

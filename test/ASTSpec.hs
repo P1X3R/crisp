@@ -4,7 +4,7 @@
 module ASTSpec (spec) where
 
 import AST (Number (..), SExpr (..), SymbolId (..), runAST)
-import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
 import Hedgehog
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..), runTokenizer)
@@ -65,6 +65,7 @@ spec = do
             astInitial === astFinal
 
         it "parses flat atoms successfully" $ do
+            -- 42 #t "hello"
             let tokens =
                     locate
                         [ TNumber "42" NTInt
@@ -78,7 +79,7 @@ spec = do
                     , Located (SStr "hello") pos
                     ]
 
-            runAST tokens `shouldBe` Right (expectedAst, M.empty)
+            runAST tokens `shouldBe` Right (expectedAst, HM.empty)
 
         it "parses standard S-Expressions and tracks symbols" $ do
             -- (add 1.5 2)
@@ -101,7 +102,7 @@ spec = do
                         )
                         pos
                     ]
-            let expectedIdMap = M.fromList [(SymbolId 0, "add")]
+            let expectedIdMap = HM.fromList [(SymbolId 0, "add")]
 
             runAST tokens `shouldBe` Right (expectedAST, expectedIdMap)
 
@@ -118,7 +119,7 @@ spec = do
                         ]
             let expectedAST = [Located (SList [Located (SList [Located (SNumber (NInt 42)) pos]) pos]) pos]
 
-            runAST tokens `shouldBe` Right (expectedAST, M.empty)
+            runAST tokens `shouldBe` Right (expectedAST, HM.empty)
 
         it "parses quoted expressions" $ do
             -- '(1 2)
@@ -133,7 +134,7 @@ spec = do
                         ]
             let expectedAST = [Located (SQuoted (Located (SList [Located (SNumber (NInt 1)) pos, Located (SNumber (NInt 2)) pos]) pos)) pos]
 
-            runAST tokens `shouldBe` Right (expectedAST, M.empty)
+            runAST tokens `shouldBe` Right (expectedAST, HM.empty)
 
     describe "runAST error handling" $ do
         it "catches unclised lists" $ do

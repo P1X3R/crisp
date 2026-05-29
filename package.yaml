@@ -35,7 +35,8 @@ library:
   - text
   - transformers
   - mtl
-  - containers
+  - unordered-containers
+  - hashable
 
 executables:
   crisp-exe:
@@ -62,4 +63,4 @@ tests:
     - hedgehog
     - hspec-hedgehog
     - text
-    - containers
+    - unordered-containers
