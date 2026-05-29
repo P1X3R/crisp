@@ -27,6 +27,7 @@ newtype ASTParser a = Parser {runASTParser :: StateT ASTParserState (Except Lang
 data ASTParserState = ASTParserState
     { aCurrentId :: SymbolId
     , aIdNameMap :: HM.HashMap SymbolId T.Text
+    , aNameIdMap :: HM.HashMap T.Text SymbolId
     , aTokenStream :: [Located Token]
     }
     deriving (Show, Eq)
@@ -82,13 +83,24 @@ parseAtom = do
         TBoolean bool -> return $ Located (SBool bool) pos
         TString content -> return $ Located (SStr content) pos
         TSymbol name -> do
-            symbolId <- gets aCurrentId
-            modify (storeId name)
+            parserState <- get
+            let (symbolId, newState) = storeId name parserState
+            put newState
             return $ Located (SSymbol symbolId) pos
         _ -> empty
   where
-    storeId name (ASTParserState sId idToM tokens) =
-        ASTParserState (sId + 1) (M.insert sId name idToM) tokens
+    storeId name parserState@(ASTParserState sId idToName nameToId tokens) =
+        case HM.lookup name nameToId of
+            Just symbolId -> (symbolId, parserState)
+            Nothing ->
+                ( sId
+                , ASTParserState
+                    { aCurrentId = sId + 1
+                    , aIdNameMap = HM.insert sId name idToName
+                    , aNameIdMap = HM.insert name sId nameToId
+                    , aTokenStream = tokens
+                    }
+                )
 
 parseList :: ASTParser (Located SExpr)
 parseList = do
@@ -139,7 +151,7 @@ genAST acc = do
 
 runAST :: [Located Token] -> Either LangError ([Located SExpr], HM.HashMap SymbolId T.Text)
 runAST tokens = do
-    (ast, (ASTParserState _ idMap _)) <- runExcept $ (runParser []) (ASTParserState 0 HM.empty tokens)
+    (ast, (ASTParserState _ idMap _ _)) <- runExcept $ (runParser []) (ASTParserState 0 HM.empty HM.empty tokens)
     Right (ast, idMap)
   where
     runParser = runStateT . runASTParser . genAST
