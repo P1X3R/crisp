@@ -64,6 +64,24 @@ spec = do
 
             astInitial === astFinal
 
+        it "same symbol has the same id" $ do
+            -- a a a
+            let tokens =
+                    locate
+                        [ TSymbol "a"
+                        , TSymbol "a"
+                        , TSymbol "a"
+                        , TEof
+                        ]
+            let expectedAst =
+                    locate
+                        [ SSymbol 0
+                        , SSymbol 0
+                        , SSymbol 0
+                        ]
+
+            runAST tokens `shouldBe` Right (expectedAst, HM.singleton 0 "a")
+
         it "parses flat atoms successfully" $ do
             -- 42 #t "hello"
             let tokens =
