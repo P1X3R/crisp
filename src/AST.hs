@@ -10,7 +10,6 @@ module AST (
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad.Except (Except, MonadError (catchError, throwError), runExcept)
 import Control.Monad.State.Strict (MonadState (get, put), StateT (runStateT), gets, modify)
-import Data.Bits (Bits (xor))
 import qualified Data.HashMap.Strict as HM
 import Data.Hashable (Hashable (..))
 import qualified Data.Text as T
@@ -45,7 +44,7 @@ data SExpr
 
 instance Hashable SymbolId where
     hash (SymbolId sId) = sId
-    hashWithSalt salt (SymbolId sId) = salt `xor` sId -- unused
+    hashWithSalt salt (SymbolId sId) = hashWithSalt salt sId
 
 instance Alternative ASTParser where
     empty = throwError (LEASTError PDNoMatch (Position 1 1))
