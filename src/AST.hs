@@ -73,21 +73,22 @@ peekToken = do
 parseAtom :: ASTParser (Located SExpr)
 parseAtom = do
     Located tok pos <- popToken
-    case tok of
+    expr <- case tok of
         TNumber number NTFloat -> case TR.double number of
-            Right (parsed, _) -> return $ Located (SNumber $ NFloat parsed) pos
+            Right (parsed, _) -> return (SNumber $ NFloat parsed)
             Left _ -> throwError (LEASTError PDInvalidNumber pos)
         TNumber number NTInt -> case TR.signed TR.decimal number of
-            Right (parsed, _) -> return $ Located (SNumber $ NInt parsed) pos
+            Right (parsed, _) -> return (SNumber $ NInt parsed)
             Left _ -> throwError (LEASTError PDInvalidNumber pos)
-        TBoolean bool -> return $ Located (SBool bool) pos
-        TString content -> return $ Located (SStr content) pos
+        TBoolean bool -> return (SBool bool)
+        TString content -> return (SStr content)
         TSymbol name -> do
             parserState <- get
             let (symbolId, newState) = storeId name parserState
             put newState
-            return $ Located (SSymbol symbolId) pos
+            return (SSymbol symbolId)
         _ -> empty
+    return (Located expr pos)
   where
     storeId name parserState@(ASTParserState sId idToName nameToId tokens) =
         case HM.lookup name nameToId of
