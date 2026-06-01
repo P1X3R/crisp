@@ -1,9 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module AST (
     SymbolId (..),
     Number (..),
     SExpr (..),
+    Primitive (..),
     runAST,
 ) where
 
@@ -33,10 +35,32 @@ data ASTParserState = ASTParserState
 
 data Number = NFloat Double | NInt Integer deriving (Show, Eq)
 
+data Primitive
+    = PDefine
+    | PIf
+    | PLambda
+    | PLet
+    | PAdd
+    | PSub
+    | PMul
+    | PDiv
+    | PEq
+    | PGreaterThan
+    | PLessThan
+    | PNot
+    | PCons
+    | PCar
+    | PCdr
+    | PList
+    | PNull
+    | PDisplay
+    deriving (Show, Eq)
+
 data SExpr
     = SNumber Number
     | SBool Bool
     | SStr T.Text
+    | SPrimitive Primitive
     | SSymbol SymbolId
     | SList [Located SExpr]
     | SQuoted (Located SExpr)
@@ -81,11 +105,30 @@ parseAtom = do
             Left _ -> throwError (LEASTError PDInvalidNumber pos)
         TBoolean bool -> return (SBool bool)
         TString content -> return (SStr content)
-        TSymbol name -> do
-            parserState <- get
-            let (symbolId, newState) = storeId name parserState
-            put newState
-            return (SSymbol symbolId)
+        TSymbol name -> case name of
+            "define" -> return (SPrimitive PDefine)
+            "if" -> return (SPrimitive PIf)
+            "lambda" -> return (SPrimitive PLambda)
+            "let" -> return (SPrimitive PLet)
+            "+" -> return (SPrimitive PAdd)
+            "-" -> return (SPrimitive PSub)
+            "*" -> return (SPrimitive PMul)
+            "/" -> return (SPrimitive PDiv)
+            "=" -> return (SPrimitive PEq)
+            ">" -> return (SPrimitive PGreaterThan)
+            "<" -> return (SPrimitive PLessThan)
+            "not" -> return (SPrimitive PNot)
+            "cons" -> return (SPrimitive PCons)
+            "car" -> return (SPrimitive PCar)
+            "cdr" -> return (SPrimitive PCdr)
+            "list" -> return (SPrimitive PList)
+            "null?" -> return (SPrimitive PNull)
+            "display" -> return (SPrimitive PDisplay)
+            _ -> do
+                parserState <- get
+                let (symbolId, newState) = storeId name parserState
+                put newState
+                return (SSymbol symbolId)
         _ -> empty
     return (Located expr pos)
   where

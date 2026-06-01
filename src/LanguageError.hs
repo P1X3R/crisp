@@ -35,5 +35,6 @@ data EvalDetail
     = EDUndefinedSymbol
     | EDArgNameAlreadyExists
     | EDWrongArgNumber
+    | EDInvalidArg
     | EDInvalidFunction
     deriving (Show, Eq)
