@@ -1,12 +1,17 @@
 module LanguageError (
-  LangError (..),
-  LexerDetail (..),
-  ASTDetail (..),
+    LangError (..),
+    LexerDetail (..),
+    ASTDetail (..),
+    EvalDetail (..),
 ) where
 
 import Location (Position)
 
-data LangError = LELexerError LexerDetail Position | LEASTError ASTDetail Position deriving (Show, Eq)
+data LangError
+    = LELexerError LexerDetail Position
+    | LEASTError ASTDetail Position
+    | LEEvalError EvalDetail Position
+    deriving (Show, Eq)
 
 data LexerDetail
     = LDMultipleDotInNumber
@@ -24,4 +29,11 @@ data ASTDetail
     | PDEmptyQuote
     | PDInvalidNumber -- Impossible error due to Lexer validation
     | PDNoMatch
+    deriving (Show, Eq)
+
+data EvalDetail
+    = EDUndefinedSymbol
+    | EDArgNameAlreadyExists
+    | EDWrongArgNumber
+    | EDInvalidFunction
     deriving (Show, Eq)
