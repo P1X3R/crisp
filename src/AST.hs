@@ -5,7 +5,7 @@ module AST (
     SymbolId (..),
     Number (..),
     SExpr (..),
-    Primitive (..),
+    SpecialSymbols (..),
     runAST,
 ) where
 
@@ -35,7 +35,7 @@ data ASTParserState = ASTParserState
 
 data Number = NFloat Double | NInt Integer deriving (Show, Eq)
 
-data Primitive
+data SpecialSymbols
     = PDefine
     | PIf
     | PLambda
@@ -60,7 +60,7 @@ data SExpr
     = SNumber Number
     | SBool Bool
     | SStr T.Text
-    | SPrimitive Primitive
+    | SSpecialSymbol SpecialSymbols
     | SSymbol SymbolId
     | SList [Located SExpr]
     | SQuoted (Located SExpr)
@@ -106,24 +106,24 @@ parseAtom = do
         TBoolean bool -> return (SBool bool)
         TString content -> return (SStr content)
         TSymbol name -> case name of
-            "define" -> return (SPrimitive PDefine)
-            "if" -> return (SPrimitive PIf)
-            "lambda" -> return (SPrimitive PLambda)
-            "let" -> return (SPrimitive PLet)
-            "+" -> return (SPrimitive PAdd)
-            "-" -> return (SPrimitive PSub)
-            "*" -> return (SPrimitive PMul)
-            "/" -> return (SPrimitive PDiv)
-            "=" -> return (SPrimitive PEq)
-            ">" -> return (SPrimitive PGreaterThan)
-            "<" -> return (SPrimitive PLessThan)
-            "not" -> return (SPrimitive PNot)
-            "cons" -> return (SPrimitive PCons)
-            "car" -> return (SPrimitive PCar)
-            "cdr" -> return (SPrimitive PCdr)
-            "list" -> return (SPrimitive PList)
-            "null?" -> return (SPrimitive PNull)
-            "display" -> return (SPrimitive PDisplay)
+            "define" -> return (SSpecialSymbol PDefine)
+            "if" -> return (SSpecialSymbol PIf)
+            "lambda" -> return (SSpecialSymbol PLambda)
+            "let" -> return (SSpecialSymbol PLet)
+            "+" -> return (SSpecialSymbol PAdd)
+            "-" -> return (SSpecialSymbol PSub)
+            "*" -> return (SSpecialSymbol PMul)
+            "/" -> return (SSpecialSymbol PDiv)
+            "=" -> return (SSpecialSymbol PEq)
+            ">" -> return (SSpecialSymbol PGreaterThan)
+            "<" -> return (SSpecialSymbol PLessThan)
+            "not" -> return (SSpecialSymbol PNot)
+            "cons" -> return (SSpecialSymbol PCons)
+            "car" -> return (SSpecialSymbol PCar)
+            "cdr" -> return (SSpecialSymbol PCdr)
+            "list" -> return (SSpecialSymbol PList)
+            "null?" -> return (SSpecialSymbol PNull)
+            "display" -> return (SSpecialSymbol PDisplay)
             _ -> do
                 parserState <- get
                 let (symbolId, newState) = storeId name parserState
