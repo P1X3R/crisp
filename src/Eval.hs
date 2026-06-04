@@ -14,41 +14,41 @@ import LanguageError (EvalDetail (..), LangError (..))
 import Location (Located (..), Position)
 import Numbers (Number (..), compareNums)
 
-data Val
-    = VNumber Number
-    | VBool Bool
-    | VStr T.Text
-    | VList [Val]
-    | VSExpr (Located SExpr)
-    | VBinding SymbolId Val
-    | VSpecialForm ([Located SExpr] -> Eval Val)
-    | VPrimitive ([Located Val] -> Eval Val)
-    | VClosure [SymbolId] (Located SExpr) Env
+data EvalResult
+    = RNumber Number
+    | RBool Bool
+    | RStr T.Text
+    | RList [EvalResult]
+    | RSExpr (Located SExpr)
+    | RBinding SymbolId EvalResult
+    | RSpecialForm ([Located SExpr] -> Eval EvalResult)
+    | RPrimitive ([Located EvalResult] -> Eval EvalResult)
+    | RClosure [SymbolId] (Located SExpr) Env
 
-type Env = HM.HashMap SymbolId Val
+type Env = HM.HashMap SymbolId EvalResult
 
 newtype Eval a = Eval {runEval :: ReaderT Env (Except LangError) a}
     deriving (Monad, Applicative, Functor, MonadError LangError, MonadReader Env)
 
-specialFormDefine :: Position -> [Located SExpr] -> Eval Val
+specialFormDefine :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormDefine _ [Located (SSymbol sId) _, expr] = do
     val <- eval expr
-    return (VBinding sId val)
+    return (RBinding sId val)
 specialFormDefine _ (Located _ symPos : _) = throwError (LEEvalError EDInvalidArg symPos)
 specialFormDefine pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-specialFormIf :: Position -> [Located SExpr] -> Eval Val
+specialFormIf :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormIf _ [cond, conseq, alt] = do
     condVal <- eval cond
     case condVal of
-        VBool False -> eval alt
+        RBool False -> eval alt
         _ -> eval conseq
 specialFormIf pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-specialFormLambda :: Position -> Env -> [Located SExpr] -> Eval Val
+specialFormLambda :: Position -> Env -> [Located SExpr] -> Eval EvalResult
 specialFormLambda _ env [Located (SList argList) _, body] = do
     idList <- getIds argList []
-    return (VClosure idList body env)
+    return (RClosure idList body env)
   where
     getIds :: [Located SExpr] -> [SymbolId] -> Eval [SymbolId]
     getIds [] acc = return (reverse acc)
@@ -57,14 +57,14 @@ specialFormLambda _ env [Located (SList argList) _, body] = do
 specialFormLambda _ _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLambda pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-specialFormLet :: Position -> [Located SExpr] -> Eval Val
+specialFormLet :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormLet _ [Located (SList bindings) _, body] = do
     bindVal <- parseBindings bindings []
     env <- ask
     let extendedEnv = foldl' (\e (k, v) -> HM.insert k v e) env bindVal
     local (const extendedEnv) (eval body)
   where
-    parseBindings :: [Located SExpr] -> [(SymbolId, Val)] -> Eval [(SymbolId, Val)]
+    parseBindings :: [Located SExpr] -> [(SymbolId, EvalResult)] -> Eval [(SymbolId, EvalResult)]
     parseBindings [] acc = return (reverse acc)
     parseBindings (Located (SList [Located (SSymbol sId) _, expr]) _ : xs) acc = do
         val <- eval expr
@@ -75,37 +75,37 @@ specialFormLet _ [Located (SList bindings) _, body] = do
 specialFormLet _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLet pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-primArithmeticOp :: Position -> (Number -> Number -> Number) -> [Located Val] -> Eval Val
-primArithmeticOp _ operation [Located (VNumber a) _, Located (VNumber b) _] =
-    return (VNumber $ a `operation` b)
+primArithmeticOp :: Position -> (Number -> Number -> Number) -> [Located EvalResult] -> Eval EvalResult
+primArithmeticOp _ operation [Located (RNumber a) _, Located (RNumber b) _] =
+    return (RNumber $ a `operation` b)
 primArithmeticOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primArithmeticOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-primComparisonOp :: Position -> Ordering -> [Located Val] -> Eval Val
-primComparisonOp _ ordering [Located (VNumber a) _, Located (VNumber b) _] =
-    return (VBool $ compareNums a b == ordering)
+primComparisonOp :: Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
+primComparisonOp _ ordering [Located (RNumber a) _, Located (RNumber b) _] =
+    return (RBool $ compareNums a b == ordering)
 primComparisonOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primComparisonOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-eval :: Located SExpr -> Eval Val
-eval (Located (SNumber num) _) = return (VNumber num)
-eval (Located (SBool boolean) _) = return (VBool boolean)
-eval (Located (SStr str) _) = return (VStr str)
+eval :: Located SExpr -> Eval EvalResult
+eval (Located (SNumber num) _) = return (RNumber num)
+eval (Located (SBool boolean) _) = return (RBool boolean)
+eval (Located (SStr str) _) = return (RStr str)
 eval (Located (SSymbol sId) pos) = do
     env <- ask
     case HM.lookup sId env of
         Nothing -> throwError (LEEvalError EDUndefinedSymbol pos)
         Just val -> return val
-eval (Located (SList []) _) = return (VList [])
+eval (Located (SList []) _) = return (RList [])
 eval (Located (SList (fnExpr : argsExpr)) pos) = do
     fnVal <- eval fnExpr
     case fnVal of
-        VSpecialForm func -> func argsExpr
-        VPrimitive primitive -> do
+        RSpecialForm func -> func argsExpr
+        RPrimitive primitive -> do
             vals <- mapM eval argsExpr
             let argsVal = zipWith (\v (Located _ exprPos) -> Located v exprPos) vals argsExpr
             primitive argsVal
-        VClosure cArgs cContent cEnv -> do
+        RClosure cArgs cContent cEnv -> do
             when (length cArgs /= length argsExpr) $
                 throwError (LEEvalError EDWrongArgNumber pos)
 
@@ -114,26 +114,26 @@ eval (Located (SList (fnExpr : argsExpr)) pos) = do
             local (const nestedEnv) (eval cContent)
         _ -> throwError (LEEvalError EDInvalidFunction pos)
   where
-    bindArgs :: [SymbolId] -> [Val] -> Env -> Position -> Eval Env
+    bindArgs :: [SymbolId] -> [EvalResult] -> Env -> Position -> Eval Env
     bindArgs ks vs env argPos
         | length ks /= length vs = throwError (LEEvalError EDWrongArgNumber argPos)
         | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
-eval (Located (SQuoted content) _) = return (VSExpr content)
+eval (Located (SQuoted content) _) = return (RSExpr content)
 eval (Located (SSpecialSymbol symbol) pos) = do
     env <- ask
     return $
         case symbol of
-            PDefine -> VSpecialForm (specialFormDefine pos)
-            PIf -> VSpecialForm (specialFormIf pos)
-            PLambda -> VSpecialForm (specialFormLambda pos env)
-            PLet -> VSpecialForm (specialFormLet pos)
-            PAdd -> VPrimitive (primArithmeticOp pos (+))
-            PSub -> VPrimitive (primArithmeticOp pos (-))
-            PMul -> VPrimitive (primArithmeticOp pos (*))
-            PDiv -> VPrimitive (primArithmeticOp pos (/))
-            PEq -> VPrimitive (primComparisonOp pos EQ)
-            PGreaterThan -> VPrimitive (primComparisonOp pos GT)
-            PLessThan -> VPrimitive (primComparisonOp pos LT)
+            PDefine -> RSpecialForm (specialFormDefine pos)
+            PIf -> RSpecialForm (specialFormIf pos)
+            PLambda -> RSpecialForm (specialFormLambda pos env)
+            PLet -> RSpecialForm (specialFormLet pos)
+            PAdd -> RPrimitive (primArithmeticOp pos (+))
+            PSub -> RPrimitive (primArithmeticOp pos (-))
+            PMul -> RPrimitive (primArithmeticOp pos (*))
+            PDiv -> RPrimitive (primArithmeticOp pos (/))
+            PEq -> RPrimitive (primComparisonOp pos EQ)
+            PGreaterThan -> RPrimitive (primComparisonOp pos GT)
+            PLessThan -> RPrimitive (primComparisonOp pos LT)
             PNot -> undefined
             PCons -> undefined
             PCar -> undefined
