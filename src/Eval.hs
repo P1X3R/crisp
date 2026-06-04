@@ -87,6 +87,11 @@ primComparisonOp _ ordering [Located (RNumber a) _, Located (RNumber b) _] =
 primComparisonOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primComparisonOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+primNot :: Position -> [Located EvalResult] -> Eval EvalResult
+primNot _ [Located (RBool b) _] = return (RBool $ not b)
+primNot _ [Located _ pos] = throwError (LEEvalError EDInvalidArg pos)
+primNot pos _ = throwError (LEEvalError EDWrongArgNumber pos)
+
 eval :: Located SExpr -> Eval EvalResult
 eval (Located (SNumber num) _) = return (RNumber num)
 eval (Located (SBool boolean) _) = return (RBool boolean)
@@ -134,7 +139,7 @@ eval (Located (SSpecialSymbol symbol) pos) = do
             PEq -> RPrimitive (primComparisonOp pos EQ)
             PGreaterThan -> RPrimitive (primComparisonOp pos GT)
             PLessThan -> RPrimitive (primComparisonOp pos LT)
-            PNot -> undefined
+            PNot -> RPrimitive (primNot pos)
             PCons -> undefined
             PCar -> undefined
             PCdr -> undefined
