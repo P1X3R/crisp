@@ -4,7 +4,7 @@ module Eval (
 
 ) where
 
-import AST (Number (..), SExpr (..), SpecialSymbols (..), SymbolId (..))
+import AST (SExpr (..), SpecialSymbols (..), SymbolId (..))
 import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (throwError))
 import Control.Monad.Reader (MonadReader (ask, local), ReaderT)
@@ -12,6 +12,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import LanguageError (EvalDetail (..), LangError (..))
 import Location (Located (..), Position)
+import Numbers (Number (..))
 
 data Val
     = VNumber Number
@@ -21,7 +22,7 @@ data Val
     | VSExpr (Located SExpr)
     | VBinding SymbolId Val
     | VSpecialForm ([Located SExpr] -> Eval Val)
-    | VPrimitive ([Val] -> Eval Val)
+    | VPrimitive ([Located Val] -> Eval Val)
     | VClosure [SymbolId] (Located SExpr) Env
 
 type Env = HM.HashMap SymbolId Val
@@ -74,6 +75,12 @@ specialFormLet _ [Located (SList bindings) _, body] = do
 specialFormLet _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLet pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+primArithmeticOp :: Position -> (Number -> Number -> Number) -> [Located Val] -> Eval Val
+primArithmeticOp _ operation [Located (VNumber a) _, Located (VNumber b) _] =
+    return (VNumber $ a `operation` b)
+primArithmeticOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primArithmeticOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
+
 eval :: Located SExpr -> Eval Val
 eval (Located (SNumber num) _) = return (VNumber num)
 eval (Located (SBool boolean) _) = return (VBool boolean)
@@ -89,7 +96,8 @@ eval (Located (SList (fnExpr : argsExpr)) pos) = do
     case fnVal of
         VSpecialForm func -> func argsExpr
         VPrimitive primitive -> do
-            argsVal <- mapM eval argsExpr
+            vals <- mapM eval argsExpr
+            let argsVal = zipWith (\v (Located _ exprPos) -> Located v exprPos) vals argsExpr
             primitive argsVal
         VClosure cArgs cContent cEnv -> do
             when (length cArgs /= length argsExpr) $
@@ -108,10 +116,10 @@ eval (Located (SSpecialSymbol symbol) pos) = do
             PIf -> VSpecialForm (specialFormIf pos)
             PLambda -> VSpecialForm (specialFormLambda pos env)
             PLet -> VSpecialForm (specialFormLet pos)
-            PAdd -> undefined
-            PSub -> undefined
-            PMul -> undefined
-            PDiv -> undefined
+            PAdd -> VPrimitive (primArithmeticOp pos (+))
+            PSub -> VPrimitive (primArithmeticOp pos (-))
+            PMul -> VPrimitive (primArithmeticOp pos (*))
+            PDiv -> VPrimitive (primArithmeticOp pos (/))
             PEq -> undefined
             PGreaterThan -> undefined
             PLessThan -> undefined
