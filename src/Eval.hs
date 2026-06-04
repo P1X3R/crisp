@@ -12,7 +12,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import LanguageError (EvalDetail (..), LangError (..))
 import Location (Located (..), Position)
-import Numbers (Number (..))
+import Numbers (Number (..), compareNums)
 
 data Val
     = VNumber Number
@@ -81,6 +81,12 @@ primArithmeticOp _ operation [Located (VNumber a) _, Located (VNumber b) _] =
 primArithmeticOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primArithmeticOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+primComparisonOp :: Position -> Ordering -> [Located Val] -> Eval Val
+primComparisonOp _ ordering [Located (VNumber a) _, Located (VNumber b) _] =
+    return (VBool $ compareNums a b == ordering)
+primComparisonOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primComparisonOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
+
 eval :: Located SExpr -> Eval Val
 eval (Located (SNumber num) _) = return (VNumber num)
 eval (Located (SBool boolean) _) = return (VBool boolean)
@@ -107,6 +113,11 @@ eval (Located (SList (fnExpr : argsExpr)) pos) = do
             nestedEnv <- bindArgs cArgs args cEnv pos
             local (const nestedEnv) (eval cContent)
         _ -> throwError (LEEvalError EDInvalidFunction pos)
+  where
+    bindArgs :: [SymbolId] -> [Val] -> Env -> Position -> Eval Env
+    bindArgs ks vs env argPos
+        | length ks /= length vs = throwError (LEEvalError EDWrongArgNumber argPos)
+        | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
 eval (Located (SQuoted content) _) = return (VSExpr content)
 eval (Located (SSpecialSymbol symbol) pos) = do
     env <- ask
@@ -120,9 +131,9 @@ eval (Located (SSpecialSymbol symbol) pos) = do
             PSub -> VPrimitive (primArithmeticOp pos (-))
             PMul -> VPrimitive (primArithmeticOp pos (*))
             PDiv -> VPrimitive (primArithmeticOp pos (/))
-            PEq -> undefined
-            PGreaterThan -> undefined
-            PLessThan -> undefined
+            PEq -> VPrimitive (primComparisonOp pos EQ)
+            PGreaterThan -> VPrimitive (primComparisonOp pos GT)
+            PLessThan -> VPrimitive (primComparisonOp pos LT)
             PNot -> undefined
             PCons -> undefined
             PCar -> undefined
@@ -130,8 +141,3 @@ eval (Located (SSpecialSymbol symbol) pos) = do
             PList -> undefined
             PNull -> undefined
             PDisplay -> undefined
-
-bindArgs :: [SymbolId] -> [Val] -> Env -> Position -> Eval Env
-bindArgs ks vs env pos
-    | length ks /= length vs = throwError (LEEvalError EDWrongArgNumber pos)
-    | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
