@@ -4,7 +4,7 @@ module ProgramHelpers (
     showSExpr
 ) where
 
-import AST (Number (..), SExpr (..), SymbolId)
+import AST (Number (..), SExpr (..), SymbolId, SpecialSymbols (..))
 import Data.List (intercalate)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
@@ -110,3 +110,23 @@ showSExpr (SList elements) idMap = do
 showSExpr (SQuoted (Located expr _)) idMap = do
     quoted <- showSExpr expr idMap
     Just $ "'" <> quoted
+
+showSExpr (SSpecialSymbol symbol) _ = Just $ case symbol of
+    PDefine -> "define"
+    PIf -> "if"
+    PLambda -> "lambda"
+    PLet -> "let"
+    PAdd -> "+"
+    PSub -> "-"
+    PMul -> "*"
+    PDiv -> "/"
+    PEq -> "="
+    PGreaterThan -> ">"
+    PLessThan -> "<"
+    PNot -> "not"
+    PCons -> "cons"
+    PCar -> "car"
+    PCdr -> "cdr"
+    PList -> "list"
+    PNull -> "null?"
+    PDisplay -> "display"
