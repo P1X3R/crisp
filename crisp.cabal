@@ -33,6 +33,7 @@ library
       Lexer
       Lib
       Location
+      Numbers
   other-modules:
       Paths_crisp
   autogen-modules:

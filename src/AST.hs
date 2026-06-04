@@ -19,6 +19,7 @@ import qualified Data.Text.Read as TR
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..))
 import Location (Located (..), Position (Position))
+import Numbers (Number (..))
 
 newtype SymbolId = SymbolId {getId :: Int} deriving (Show, Eq, Ord, Num)
 
@@ -32,8 +33,6 @@ data ASTParserState = ASTParserState
     , aTokenStream :: [Located Token]
     }
     deriving (Show, Eq)
-
-data Number = NFloat Double | NInt Integer deriving (Show, Eq)
 
 data SpecialSymbols
     = PDefine

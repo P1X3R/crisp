@@ -3,7 +3,8 @@
 
 module ASTSpec (spec) where
 
-import AST (Number (..), SExpr (..), SymbolId (..), runAST)
+import AST (SExpr (..), SymbolId (..), runAST)
+import Numbers (Number (..))
 import qualified Data.HashMap.Strict as HM
 import Hedgehog
 import LanguageError (ASTDetail (..), LangError (..))
