@@ -5,7 +5,6 @@ module AST (
     SymbolId (..),
     Number (..),
     SExpr (..),
-    SpecialSymbols (..),
     runAST,
 ) where
 
@@ -34,32 +33,10 @@ data ASTParserState = ASTParserState
     }
     deriving (Show, Eq)
 
-data SpecialSymbols
-    = PDefine
-    | PIf
-    | PLambda
-    | PLet
-    | PAdd
-    | PSub
-    | PMul
-    | PDiv
-    | PEq
-    | PGreaterThan
-    | PLessThan
-    | PNot
-    | PCons
-    | PCar
-    | PCdr
-    | PList
-    | PNull
-    | PDisplay
-    deriving (Show, Eq)
-
 data SExpr
     = SNumber Number
     | SBool Bool
     | SStr T.Text
-    | SSpecialSymbol SpecialSymbols
     | SSymbol SymbolId
     | SList [Located SExpr]
     | SQuoted (Located SExpr)
@@ -104,30 +81,11 @@ parseAtom = do
             Left _ -> throwError (LEASTError PDInvalidNumber pos)
         TBoolean bool -> return (SBool bool)
         TString content -> return (SStr content)
-        TSymbol name -> case name of
-            "define" -> return (SSpecialSymbol PDefine)
-            "if" -> return (SSpecialSymbol PIf)
-            "lambda" -> return (SSpecialSymbol PLambda)
-            "let" -> return (SSpecialSymbol PLet)
-            "+" -> return (SSpecialSymbol PAdd)
-            "-" -> return (SSpecialSymbol PSub)
-            "*" -> return (SSpecialSymbol PMul)
-            "/" -> return (SSpecialSymbol PDiv)
-            "=" -> return (SSpecialSymbol PEq)
-            ">" -> return (SSpecialSymbol PGreaterThan)
-            "<" -> return (SSpecialSymbol PLessThan)
-            "not" -> return (SSpecialSymbol PNot)
-            "cons" -> return (SSpecialSymbol PCons)
-            "car" -> return (SSpecialSymbol PCar)
-            "cdr" -> return (SSpecialSymbol PCdr)
-            "list" -> return (SSpecialSymbol PList)
-            "null?" -> return (SSpecialSymbol PNull)
-            "display" -> return (SSpecialSymbol PDisplay)
-            _ -> do
-                parserState <- get
-                let (symbolId, newState) = storeId name parserState
-                put newState
-                return (SSymbol symbolId)
+        TSymbol name -> do
+            parserState <- get
+            let (symbolId, newState) = storeId name parserState
+            put newState
+            return (SSymbol symbolId)
         _ -> empty
     return (Located expr pos)
   where

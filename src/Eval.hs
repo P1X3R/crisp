@@ -4,7 +4,7 @@ module Eval (
 
 ) where
 
-import AST (SExpr (..), SpecialSymbols (..), SymbolId (..))
+import AST (SExpr (..), SymbolId (..))
 import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (throwError))
 import Control.Monad.Reader (MonadReader (ask, local), ReaderT)
@@ -124,25 +124,3 @@ eval (Located (SList (fnExpr : argsExpr)) pos) = do
         | length ks /= length vs = throwError (LEEvalError EDWrongArgNumber argPos)
         | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
 eval (Located (SQuoted content) _) = return (RSExpr content)
-eval (Located (SSpecialSymbol symbol) pos) = do
-    env <- ask
-    return $
-        case symbol of
-            PDefine -> RSpecialForm (specialFormDefine pos)
-            PIf -> RSpecialForm (specialFormIf pos)
-            PLambda -> RSpecialForm (specialFormLambda pos env)
-            PLet -> RSpecialForm (specialFormLet pos)
-            PAdd -> RPrimitive (primArithmeticOp pos (+))
-            PSub -> RPrimitive (primArithmeticOp pos (-))
-            PMul -> RPrimitive (primArithmeticOp pos (*))
-            PDiv -> RPrimitive (primArithmeticOp pos (/))
-            PEq -> RPrimitive (primComparisonOp pos EQ)
-            PGreaterThan -> RPrimitive (primComparisonOp pos GT)
-            PLessThan -> RPrimitive (primComparisonOp pos LT)
-            PNot -> RPrimitive (primNot pos)
-            PCons -> undefined
-            PCar -> undefined
-            PCdr -> undefined
-            PList -> undefined
-            PNull -> undefined
-            PDisplay -> undefined
