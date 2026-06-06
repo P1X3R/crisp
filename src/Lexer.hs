@@ -16,7 +16,6 @@ import Control.Monad.State (MonadState, gets, modify)
 import Control.Monad.Trans.Except (Except, runExcept)
 import Control.Monad.Trans.State (StateT, runStateT)
 import Data.Char (isAlpha, isDigit, isSpace)
-import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.Text.Lazy.Builder as B
@@ -73,9 +72,6 @@ expectParser predicate = do
     case T.uncons rest of
         Just (c, _) | predicate c -> pure ()
         _ -> noMatch
-
-reservedKeywords :: HM.HashMap T.Text Token
-reservedKeywords = HM.fromList [("quote", TQuote)]
 
 isEndOfFile :: Parser Bool
 isEndOfFile = do
@@ -188,11 +184,7 @@ parseSymbol = do
     contentBuilder <- consume isSymbolBodyChar mempty
     let content = toStrict $ B.toLazyText contentBuilder
 
-    let tokenType = case HM.lookup content reservedKeywords of
-            Just t -> t
-            Nothing -> TSymbol content
-
-    return $ Located tokenType pos
+    return $ Located (TSymbol content) pos
   where
     isSymbolStartChar c = c `elem` ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_'] || isAlpha c
     isSymbolBodyChar c = isSymbolStartChar c || isDigit c
@@ -232,9 +224,9 @@ tokenize acc = do
             token <- parsers
             tokenize $ token : acc
 
-runTokenizer :: String -> Either LangError [Located Token]
+runTokenizer :: T.Text -> Either LangError [Located Token]
 runTokenizer input = do
-    (tokens, _) <- runExcept ((run []) (ParserState (T.pack input) (Position 1 1)))
+    (tokens, _) <- runExcept ((run []) (ParserState input (Position 1 1)))
     return $ reverse tokens
   where
     run = runStateT . runParser . tokenize

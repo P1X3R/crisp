@@ -9,6 +9,7 @@ import qualified Data.HashMap.Strict as HM
 import Hedgehog
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..), runTokenizer)
+import qualified Data.Text as T
 import Location (Located (..), Position (..))
 import ProgramHelpers (genExpr, showSExpr)
 import Test.Hspec
@@ -48,8 +49,8 @@ spec = do
             tokFinal <- case runTokenizer srcFinal of
                 Left err -> do
                     annotateShow err
-                    footnote $ "Failed to tokenize printed string: " <> srcFinal
-                    footnote $ "Original String: " <> srcInitial
+                    footnote $ "Failed to tokenize printed string: " <> T.unpack srcFinal
+                    footnote $ "Original String: " <> T.unpack srcInitial
                     footnoteShow astInitial
                     failure
                 Right tok -> return tok
@@ -60,8 +61,8 @@ spec = do
                 _ -> footnote "Second pass found multiple expressions" >> failure
 
             footnote $ "=== ROUNDTRIP FAILURE ==="
-            footnote $ "Original String: " <> srcInitial
-            footnote $ "Printed String:  " <> srcFinal
+            footnote $ "Original String: " <> T.unpack srcInitial
+            footnote $ "Printed String:  " <> T.unpack srcFinal
 
             astInitial === astFinal
 

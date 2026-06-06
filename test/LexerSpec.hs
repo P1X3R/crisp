@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module LexerSpec (spec) where
 
@@ -12,11 +13,13 @@ import Test.Hspec
 import Test.Hspec.Hedgehog
 import Location (Located(..), Position (..))
 
-advanceUntilMatch :: String -> Position -> Position -> String
+advanceUntilMatch :: T.Text -> Position -> Position -> T.Text
 advanceUntilMatch "" _ _ = ""
-advanceUntilMatch code@(c : cs) pos posAcc
+advanceUntilMatch code pos posAcc
     | pos == posAcc = code
-    | otherwise = advanceUntilMatch cs pos (movePosition posAcc c)
+    | otherwise = case T.uncons code of
+        Nothing -> ""
+        Just (c, cs) -> advanceUntilMatch cs pos (movePosition posAcc c)
   where
     movePosition (Position l _) '\n' = Position (l + 1) 1
     movePosition (Position l col) _ = Position l (col + 1)
@@ -62,7 +65,7 @@ spec = do
             withParen <- forAll $ genProgram
 
             -- filter out parentheses from input becuase otherwise the lexer would encounter an unclosed list
-            let input = filter (\c -> notElem c "()") withParen
+            let input = T.filter (\c -> notElem c ['(', ')']) withParen
             annotateShow input
 
             case runTokenizer input of
