@@ -117,6 +117,9 @@ primCdr _ [Located (RList (_ : cs)) _] = return (RList cs)
 primCdr _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primCdr pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+primList :: Position -> [Located EvalResult] -> Eval EvalResult
+primList _ args = return (RList [x | Located x _ <- args])
+
 eval :: Located SExpr -> Eval EvalResult
 eval (Located (SNumber num) _) = return (RNumber num)
 eval (Located (SBool boolean) _) = return (RBool boolean)
