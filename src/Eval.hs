@@ -85,11 +85,37 @@ specialFormLet _ [Located (SList bindings) _, body] = do
 specialFormLet _ [Located _ argsPos, _] = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLet pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-primArithmeticOp :: (Number -> Number -> Number) -> [Located EvalResult] -> Number -> Eval EvalResult
-primArithmeticOp _ [] acc = return (RNumber acc)
-primArithmeticOp operation (Located (RNumber num) _ : cs) acc =
-    primArithmeticOp operation cs (num `operation` acc)
-primArithmeticOp _ (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos)
+primCommutativeOp :: (Number -> Number -> Number) -> [Located EvalResult] -> Number -> Eval EvalResult
+primCommutativeOp _ [] acc = return (RNumber acc)
+primCommutativeOp operation (Located (RNumber num) _ : cs) acc =
+    primCommutativeOp operation cs (num `operation` acc)
+primCommutativeOp _ (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos)
+
+primArithmeticOp :: Position -> Number -> (Number -> Number -> Number) -> Bool -> [Located EvalResult] -> Eval EvalResult
+primArithmeticOp pos base operation allowZero args = case args of
+    [] -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located val argPos] -> case val of
+        RNumber num ->
+            if allowZero && isZero num
+                then throwError (LEEvalError EDInvalidArg argPos)
+                else return (RNumber $ base `operation` num)
+        _ -> throwError (LEEvalError EDInvalidArg argPos)
+    (Located firstVal firstPos : cs) -> case firstVal of
+        RNumber firstNum -> do
+            res <- calculate cs firstNum
+            return (RNumber res)
+        _ -> throwError (LEEvalError EDInvalidArg firstPos)
+  where
+    isZero (NInt 0) = True
+    isZero (NFloat 0.0) = True
+    isZero _ = False
+
+    calculate :: [Located EvalResult] -> Number -> Eval Number
+    calculate [] acc = return acc
+    calculate (Located (RNumber x) pos : xs) acc
+        | allowZero && isZero x = throwError (LEEvalError EDInvalidArg pos)
+        | otherwise = calculate xs (acc `operation` x)
+    calculate (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos)
 
 primComparisonOp :: Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
 primComparisonOp _ ordering [Located (RNumber a) _, Located (RNumber b) _] =
