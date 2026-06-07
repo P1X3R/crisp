@@ -4,7 +4,7 @@ module Eval (
 
 ) where
 
-import AST (SExpr (..), SymbolId (..))
+import AST (SExpr (..))
 import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (throwError))
 import Control.Monad.Reader (MonadReader (ask, local), ReaderT)
@@ -13,6 +13,7 @@ import qualified Data.Text as T
 import LanguageError (EvalDetail (..), LangError (..))
 import Location (Located (..), Position)
 import Numbers (Number (..), compareNums)
+import Symbols (SymbolId)
 
 data EvalResult
     = RNumber Number
@@ -123,4 +124,3 @@ eval (Located (SList (fnExpr : argsExpr)) pos) = do
     bindArgs ks vs env argPos
         | length ks /= length vs = throwError (LEEvalError EDWrongArgNumber argPos)
         | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
-eval (Located (SQuoted content) _) = return (RSExpr content)

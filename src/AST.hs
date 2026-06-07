@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module AST (
-    SymbolId (..),
     Number (..),
     SExpr (..),
     runAST,
@@ -12,15 +11,14 @@ import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad.Except (Except, MonadError (catchError, throwError), runExcept)
 import Control.Monad.State.Strict (MonadState (get, put), StateT (runStateT), gets, modify)
 import qualified Data.HashMap.Strict as HM
-import Data.Hashable (Hashable (..))
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
+import Data.Tuple (swap)
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..))
 import Location (Located (..), Position (Position))
 import Numbers (Number (..))
-
-newtype SymbolId = SymbolId {getId :: Int} deriving (Show, Eq, Ord, Num)
+import Symbols (SymbolId (..), specialSymbols, specialSymbolsNumber, symQuote)
 
 newtype ASTParser a = Parser {runASTParser :: StateT ASTParserState (Except LangError) a}
     deriving (Applicative, Functor, Monad, MonadState ASTParserState, MonadError LangError)
@@ -39,12 +37,7 @@ data SExpr
     | SStr T.Text
     | SSymbol SymbolId
     | SList [Located SExpr]
-    | SQuoted (Located SExpr)
     deriving (Show, Eq)
-
-instance Hashable SymbolId where
-    hash (SymbolId sId) = sId
-    hashWithSalt salt (SymbolId sId) = hashWithSalt salt sId
 
 instance Alternative ASTParser where
     empty = throwError (LEASTError PDNoMatch (Position 1 1))
@@ -131,7 +124,9 @@ parseQuote = do
     case tok of
         TQuote -> do
             expr <- parseToken
-            return $ Located (SQuoted expr) pos
+
+            -- Both the list and "quote" symbol share the same position in the source code
+            return $ Located (SList [Located (SSymbol symQuote) pos, expr]) pos
         TRightParen -> throwError (LEASTError PDEmptyQuote pos)
         TEof -> throwError (LEASTError PDEmptyQuote pos)
         _ -> empty
@@ -151,7 +146,16 @@ genAST acc = do
 
 runAST :: [Located Token] -> Either LangError ([Located SExpr], HM.HashMap SymbolId T.Text)
 runAST tokens = do
-    (ast, (ASTParserState _ idMap _ _)) <- runExcept $ (runParser []) (ASTParserState 0 HM.empty HM.empty tokens)
+    (ast, (ASTParserState _ idMap _ _)) <-
+        runExcept $
+            (runParser [])
+                ( ASTParserState
+                    { aCurrentId = SymbolId (specialSymbolsNumber + 1)
+                    , aIdNameMap = HM.fromList (map swap specialSymbols)
+                    , aNameIdMap = HM.fromList specialSymbols
+                    , aTokenStream = tokens
+                    }
+                )
     Right (ast, idMap)
   where
     runParser = runStateT . runASTParser . genAST

@@ -6,7 +6,7 @@ module ProgramHelpers (
     showSExpr,
 ) where
 
-import AST (Number (..), SExpr (..), SymbolId)
+import AST (Number (..), SExpr (..))
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -16,6 +16,7 @@ import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Location (Located (..))
+import Symbols (SymbolId, symQuote)
 
 minInt :: Int
 minInt = -100
@@ -51,7 +52,7 @@ genNumber :: Gen T.Text
 genNumber =
     let randInt = T.pack . show <$> Gen.int (Range.linear minInt maxInt)
         randFloat =
-           (\f -> TL.toStrict . B.toLazyText $ B.formatRealFloat B.Fixed Nothing f)
+            (\f -> TL.toStrict . B.toLazyText $ B.formatRealFloat B.Fixed Nothing f)
                 <$> Gen.float (Range.linearFrac minFloat maxFloat)
      in Gen.choice [randInt, randFloat]
 
@@ -64,7 +65,7 @@ genString = do
     return $ "\"" <> content <> "\""
 
 genSymbol :: Gen T.Text
-genSymbol = do
+genSymbol = Gen.filter (/= "quote") $ do
     let specialSymbols = ['+', '-', '*', '/', '>', '<', '=', '!', '?', '_']
     let nonDigit = Gen.choice [Gen.alpha, Gen.element specialSymbols]
     let anySymbol = Gen.choice [Gen.alphaNum, Gen.element specialSymbols]
@@ -107,9 +108,10 @@ showSExpr (SBool bool) _ = Just $ case bool of
     False -> "#f"
 showSExpr (SStr content) _ = Just $ "\"" <> content <> "\""
 showSExpr (SSymbol sId) idMap = HM.lookup sId idMap
+showSExpr (SList [Located (SSymbol sId) _, Located expr _]) idMap
+    | sId == symQuote = do
+        quoted <- showSExpr expr idMap
+        Just $ "'" <> quoted
 showSExpr (SList elements) idMap = do
     content <- mapM (\(Located e _) -> showSExpr e idMap) elements
     Just $ "(" <> T.unwords content <> ")"
-showSExpr (SQuoted (Located expr _)) idMap = do
-    quoted <- showSExpr expr idMap
-    Just $ "'" <> quoted

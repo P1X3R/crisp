@@ -3,15 +3,17 @@
 
 module ASTSpec (spec) where
 
-import AST (SExpr (..), SymbolId (..), runAST)
-import Numbers (Number (..))
+import AST (SExpr (..), runAST)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Text as T
+import Data.Tuple (swap)
 import Hedgehog
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..), runTokenizer)
-import qualified Data.Text as T
 import Location (Located (..), Position (..))
+import Numbers (Number (..))
 import ProgramHelpers (genExpr, showSExpr)
+import Symbols (SymbolId (..), specialSymbols, symQuote)
 import Test.Hspec
 import Test.Hspec.Hedgehog
 
@@ -20,6 +22,10 @@ pos = Position 1 1
 
 locate :: [a] -> [Located a]
 locate l = [Located e pos | e <- l]
+
+-- Helper to construct the expected environment map alongside any dynamic identifiers
+buildExpectedMap :: [(SymbolId, T.Text)] -> HM.HashMap SymbolId T.Text
+buildExpectedMap dynamics = HM.union (HM.fromList dynamics) (HM.fromList $ map swap specialSymbols)
 
 spec :: Spec
 spec = do
@@ -75,14 +81,15 @@ spec = do
                         , TSymbol "a"
                         , TEof
                         ]
+            -- Next free dynamic id starts at 19
             let expectedAst =
                     locate
-                        [ SSymbol 0
-                        , SSymbol 0
-                        , SSymbol 0
+                        [ SSymbol 19
+                        , SSymbol 19
+                        , SSymbol 19
                         ]
 
-            runAST tokens `shouldBe` Right (expectedAst, HM.singleton 0 "a")
+            runAST tokens `shouldBe` Right (expectedAst, buildExpectedMap [(19, "a")])
 
         it "parses flat atoms successfully" $ do
             -- 42 #t "hello"
@@ -99,7 +106,7 @@ spec = do
                     , Located (SStr "hello") pos
                     ]
 
-            runAST tokens `shouldBe` Right (expectedAst, HM.empty)
+            runAST tokens `shouldBe` Right (expectedAst, buildExpectedMap [])
 
         it "parses standard S-Expressions and tracks symbols" $ do
             -- (add 1.5 2)
@@ -115,14 +122,14 @@ spec = do
             let expectedAST =
                     [ Located
                         ( SList
-                            [ Located (SSymbol (SymbolId 0)) pos
+                            [ Located (SSymbol (SymbolId 19)) pos
                             , Located (SNumber (NFloat 1.5)) pos
                             , Located (SNumber (NInt 2)) pos
                             ]
                         )
                         pos
                     ]
-            let expectedIdMap = HM.fromList [(SymbolId 0, "add")]
+            let expectedIdMap = buildExpectedMap [(19, "add")]
 
             runAST tokens `shouldBe` Right (expectedAST, expectedIdMap)
 
@@ -139,11 +146,11 @@ spec = do
                         ]
             let expectedAST = [Located (SList [Located (SList [Located (SNumber (NInt 42)) pos]) pos]) pos]
 
-            runAST tokens `shouldBe` Right (expectedAST, HM.empty)
+            runAST tokens `shouldBe` Right (expectedAST, buildExpectedMap [])
 
         it "parses quoted expressions" $ do
             -- '(1 2)
-            let tokens =
+            let tokens_sugar =
                     locate
                         [ TQuote
                         , TLeftParen
@@ -152,12 +159,36 @@ spec = do
                         , TRightParen
                         , TEof
                         ]
-            let expectedAST = [Located (SQuoted (Located (SList [Located (SNumber (NInt 1)) pos, Located (SNumber (NInt 2)) pos]) pos)) pos]
 
-            runAST tokens `shouldBe` Right (expectedAST, HM.empty)
+            -- (quote (1 2))
+            let tokens_without_sugar =
+                    locate
+                        [ TLeftParen
+                        , TSymbol "quote"
+                        , TLeftParen
+                        , TNumber "1" NTInt
+                        , TNumber "2" NTInt
+                        , TRightParen
+                        , TRightParen
+                        , TEof
+                        ]
+
+            -- (quote (1 2))
+            let expectedAST =
+                    [ Located
+                        ( SList
+                            [ Located (SSymbol symQuote) pos
+                            , Located (SList [Located (SNumber (NInt 1)) pos, Located (SNumber (NInt 2)) pos]) pos
+                            ]
+                        )
+                        pos
+                    ]
+
+            runAST tokens_sugar `shouldBe` Right (expectedAST, buildExpectedMap [])
+            runAST tokens_without_sugar `shouldBe` Right (expectedAST, buildExpectedMap [])
 
     describe "runAST error handling" $ do
-        it "catches unclised lists" $ do
+        it "catches unclosed lists" $ do
             -- (abc
             let tokens =
                     locate
