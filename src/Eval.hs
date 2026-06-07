@@ -5,7 +5,6 @@ module Eval (
 ) where
 
 import AST (SExpr (..))
-import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (throwError))
 import Control.Monad.Reader (MonadReader (ask, local), ReaderT)
 import qualified Data.HashMap.Strict as HM
@@ -148,9 +147,6 @@ eval (Located (SList (fnExpr : argsExpr)) pos) = do
             let argsVal = zipWith (\v (Located _ exprPos) -> Located v exprPos) vals argsExpr
             primitive argsVal
         RClosure cArgs cContent cEnv -> do
-            when (length cArgs /= length argsExpr) $
-                throwError (LEEvalError EDWrongArgNumber pos)
-
             args <- mapM eval argsExpr
             nestedEnv <- bindArgs cArgs args cEnv pos
             local (const nestedEnv) (eval cContent)
