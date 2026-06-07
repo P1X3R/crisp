@@ -85,11 +85,11 @@ specialFormLet _ [Located (SList bindings) _, body] = do
 specialFormLet _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLet pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
-primArithmeticOp :: Position -> (Number -> Number -> Number) -> [Located EvalResult] -> Eval EvalResult
-primArithmeticOp _ operation [Located (RNumber a) _, Located (RNumber b) _] =
-    return (RNumber $ a `operation` b)
-primArithmeticOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
-primArithmeticOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
+primArithmeticOp :: (Number -> Number -> Number) -> [Located EvalResult] -> Number -> Eval EvalResult
+primArithmeticOp _ [] acc = return (RNumber acc)
+primArithmeticOp operation (Located (RNumber num) _ : cs) acc =
+    primArithmeticOp operation cs (num `operation` acc)
+primArithmeticOp _ (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos) 
 
 primComparisonOp :: Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
 primComparisonOp _ ordering [Located (RNumber a) _, Located (RNumber b) _] =
