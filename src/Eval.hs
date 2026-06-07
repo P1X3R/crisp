@@ -112,6 +112,11 @@ primCar _ [Located (RList (c : _)) _] = return c
 primCar _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primCar pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+primCdr :: Position -> [Located EvalResult] -> Eval EvalResult
+primCdr _ [Located (RList (_ : cs)) _] = return (RList cs)
+primCdr _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primCdr pos _ = throwError (LEEvalError EDWrongArgNumber pos)
+
 eval :: Located SExpr -> Eval EvalResult
 eval (Located (SNumber num) _) = return (RNumber num)
 eval (Located (SBool boolean) _) = return (RBool boolean)
