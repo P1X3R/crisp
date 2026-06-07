@@ -140,7 +140,8 @@ primNot pos args = case args of
 
 primCons :: Position -> [Located EvalResult] -> Eval EvalResult
 primCons pos args = case args of
-    [Located a _, Located b _] -> return (RList [a, b])
+    [Located x _, Located (RList xs) _] -> return (RList (x : xs))
+    [Located _ _, Located _ argPos] -> throwError (LEEvalError EDInvalidArg argPos)
     _ -> throwError (LEEvalError EDWrongArgNumber pos)
 
 primCar :: Position -> [Located EvalResult] -> Eval EvalResult
