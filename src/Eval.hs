@@ -20,7 +20,7 @@ data EvalResult
     | RBool Bool
     | RStr T.Text
     | RList [EvalResult]
-    | RSExpr (Located SExpr)
+    | RSymbol SymbolId
     | RBinding SymbolId EvalResult
     | RSpecialForm ([Located SExpr] -> Eval EvalResult)
     | RPrimitive ([Located EvalResult] -> Eval EvalResult)
@@ -30,6 +30,15 @@ type Env = HM.HashMap SymbolId EvalResult
 
 newtype Eval a = Eval {runEval :: ReaderT Env (Except LangError) a}
     deriving (Monad, Applicative, Functor, MonadError LangError, MonadReader Env)
+
+specialFormQuote :: Position -> [Located SExpr] -> Eval EvalResult
+specialFormQuote _ [Located (SNumber num) _] = return (RNumber num)
+specialFormQuote _ [Located (SBool boolean) _] = return (RBool boolean)
+specialFormQuote _ [Located (SSymbol sId) _] = return (RSymbol sId)
+specialFormQuote pos [Located (SList elements) _] = do
+    content <- mapM (\e -> specialFormQuote pos [e]) elements
+    return (RList content)
+specialFormQuote pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 specialFormDefine :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormDefine _ [Located (SSymbol sId) _, expr] = do
