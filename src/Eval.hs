@@ -102,6 +102,11 @@ primNot _ [Located (RBool b) _] = return (RBool $ not b)
 primNot _ [Located _ pos] = throwError (LEEvalError EDInvalidArg pos)
 primNot pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+primCons :: Position -> [Located EvalResult] -> Eval EvalResult
+primCons _ [Located a _, Located b _] = return (RList [a, b])
+primCons _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primCons pos _ = throwError (LEEvalError EDWrongArgNumber pos)
+
 eval :: Located SExpr -> Eval EvalResult
 eval (Located (SNumber num) _) = return (RNumber num)
 eval (Located (SBool boolean) _) = return (RBool boolean)
