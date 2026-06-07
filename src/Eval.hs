@@ -104,7 +104,7 @@ primArithmeticOp pos base operation allowZero args = case args of
     [] -> throwError (LEEvalError EDWrongArgNumber pos)
     [Located val argPos] -> case val of
         RNumber num ->
-            if allowZero && isZero num
+            if not allowZero && isZero num
                 then throwError (LEEvalError EDInvalidArg argPos)
                 else return (RNumber $ base `operation` num)
         _ -> throwError (LEEvalError EDInvalidArg argPos)
