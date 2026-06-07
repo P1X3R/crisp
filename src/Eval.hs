@@ -45,7 +45,7 @@ specialFormDefine :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormDefine _ [Located (SSymbol sId) _, expr] = do
     val <- eval expr
     return (RBinding sId val)
-specialFormDefine _ (Located _ symPos : _) = throwError (LEEvalError EDInvalidArg symPos)
+specialFormDefine _ [Located _ symPos, _] = throwError (LEEvalError EDInvalidArg symPos)
 specialFormDefine pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 specialFormIf :: Position -> [Located SExpr] -> Eval EvalResult
@@ -65,7 +65,7 @@ specialFormLambda _ env [Located (SList argList) _, body] = do
     getIds [] acc = return (reverse acc)
     getIds (Located (SSymbol sId) _ : xs) acc = getIds xs (sId : acc)
     getIds (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos)
-specialFormLambda _ _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
+specialFormLambda _ _ [Located _ argsPos, _] = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLambda pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 -- Behaves more like `let*` rather than `let` from Racket
@@ -83,7 +83,7 @@ specialFormLet _ [Located (SList bindings) _, body] = do
     parseBindings (Located (SList (Located _ sPos : _)) _ : _) _ = throwError (LEEvalError EDInvalidArg sPos)
     parseBindings (Located (SList _) listPos : _) _ = throwError (LEEvalError EDWrongArgNumber listPos)
     parseBindings (Located _ listPos : _) _ = throwError (LEEvalError EDInvalidArg listPos)
-specialFormLet _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
+specialFormLet _ [Located _ argsPos, _] = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLet pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primArithmeticOp :: (Number -> Number -> Number) -> [Located EvalResult] -> Number -> Eval EvalResult
@@ -95,7 +95,7 @@ primArithmeticOp _ (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg 
 primComparisonOp :: Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
 primComparisonOp _ ordering [Located (RNumber a) _, Located (RNumber b) _] =
     return (RBool $ compareNums a b == ordering)
-primComparisonOp _ _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primComparisonOp _ _ [Located _ pos, Located _ _] = throwError (LEEvalError EDInvalidArg pos)
 primComparisonOp pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primNot :: Position -> [Located EvalResult] -> Eval EvalResult
@@ -105,17 +105,16 @@ primNot pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primCons :: Position -> [Located EvalResult] -> Eval EvalResult
 primCons _ [Located a _, Located b _] = return (RList [a, b])
-primCons _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primCons pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primCar :: Position -> [Located EvalResult] -> Eval EvalResult
 primCar _ [Located (RList (c : _)) _] = return c
-primCar _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primCar _ [Located _ pos] = throwError (LEEvalError EDInvalidArg pos)
 primCar pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primCdr :: Position -> [Located EvalResult] -> Eval EvalResult
 primCdr _ [Located (RList (_ : cs)) _] = return (RList cs)
-primCdr _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primCdr _ [Located _ pos] = throwError (LEEvalError EDInvalidArg pos)
 primCdr pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primList :: Position -> [Located EvalResult] -> Eval EvalResult
@@ -123,12 +122,11 @@ primList _ args = return (RList [x | Located x _ <- args])
 
 primNull :: Position -> [Located EvalResult] -> Eval EvalResult
 primNull _ [Located (RList content) _] = return (RBool $ null content)
-primNull _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primNull _ [Located _ pos] = throwError (LEEvalError EDInvalidArg pos)
 primNull pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 primDisplay :: Position -> [Located EvalResult] -> Eval EvalResult
 primDisplay _ [Located val _] = return (RPrint val)
-primDisplay _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primDisplay pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 eval :: Located SExpr -> Eval EvalResult
