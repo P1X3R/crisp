@@ -22,6 +22,7 @@ data EvalResult
     | RList [EvalResult]
     | RSymbol SymbolId
     | RBinding SymbolId EvalResult
+    | RPrint EvalResult
     | RSpecialForm ([Located SExpr] -> Eval EvalResult)
     | RPrimitive ([Located EvalResult] -> Eval EvalResult)
     | RClosure [SymbolId] (Located SExpr) Env
@@ -124,6 +125,11 @@ primNull :: Position -> [Located EvalResult] -> Eval EvalResult
 primNull _ [Located (RList content) _] = return (RBool $ null content)
 primNull _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primNull pos _ = throwError (LEEvalError EDWrongArgNumber pos)
+
+primDisplay :: Position -> [Located EvalResult] -> Eval EvalResult
+primDisplay _ [Located val _] = return (RPrint val)
+primDisplay _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primDisplay pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 eval :: Located SExpr -> Eval EvalResult
 eval (Located (SNumber num) _) = return (RNumber num)
