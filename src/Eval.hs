@@ -89,7 +89,7 @@ primArithmeticOp :: (Number -> Number -> Number) -> [Located EvalResult] -> Numb
 primArithmeticOp _ [] acc = return (RNumber acc)
 primArithmeticOp operation (Located (RNumber num) _ : cs) acc =
     primArithmeticOp operation cs (num `operation` acc)
-primArithmeticOp _ (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos) 
+primArithmeticOp _ (Located _ pos : _) _ = throwError (LEEvalError EDInvalidArg pos)
 
 primComparisonOp :: Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
 primComparisonOp _ ordering [Located (RNumber a) _, Located (RNumber b) _] =
@@ -106,6 +106,11 @@ primCons :: Position -> [Located EvalResult] -> Eval EvalResult
 primCons _ [Located a _, Located b _] = return (RList [a, b])
 primCons _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
 primCons pos _ = throwError (LEEvalError EDWrongArgNumber pos)
+
+primCar :: Position -> [Located EvalResult] -> Eval EvalResult
+primCar _ [Located (RList (c : _)) _] = return c
+primCar _ (Located _ pos : _) = throwError (LEEvalError EDInvalidArg pos)
+primCar pos _ = throwError (LEEvalError EDWrongArgNumber pos)
 
 eval :: Located SExpr -> Eval EvalResult
 eval (Located (SNumber num) _) = return (RNumber num)
