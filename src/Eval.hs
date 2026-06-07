@@ -67,18 +67,18 @@ specialFormLambda _ env [Located (SList argList) _, body] = do
 specialFormLambda _ _ (Located _ argsPos : _) = throwError (LEEvalError EDInvalidArg argsPos)
 specialFormLambda pos _ _ = throwError (LEEvalError EDWrongArgNumber pos)
 
+-- Behaves more like `let*` rather than `let` from Racket
 specialFormLet :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormLet _ [Located (SList bindings) _, body] = do
-    bindVal <- parseBindings bindings []
     env <- ask
-    let extendedEnv = foldl' (\e (k, v) -> HM.insert k v e) env bindVal
+    extendedEnv <- parseBindings bindings env
     local (const extendedEnv) (eval body)
   where
-    parseBindings :: [Located SExpr] -> [(SymbolId, EvalResult)] -> Eval [(SymbolId, EvalResult)]
-    parseBindings [] acc = return (reverse acc)
+    parseBindings :: [Located SExpr] -> Env -> Eval Env
+    parseBindings [] acc = return acc
     parseBindings (Located (SList [Located (SSymbol sId) _, expr]) _ : xs) acc = do
-        val <- eval expr
-        parseBindings xs ((sId, val) : acc)
+        val <- local (const acc) (eval expr)
+        parseBindings xs (HM.insert sId val acc)
     parseBindings (Located (SList (Located _ sPos : _)) _ : _) _ = throwError (LEEvalError EDInvalidArg sPos)
     parseBindings (Located (SList _) listPos : _) _ = throwError (LEEvalError EDWrongArgNumber listPos)
     parseBindings (Located _ listPos : _) _ = throwError (LEEvalError EDInvalidArg listPos)
