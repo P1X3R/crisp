@@ -173,28 +173,29 @@ primDisplay pos args = case args of
     _ -> throwError (LEEvalError EDWrongArgNumber pos)
 
 eval :: Located SExpr -> Eval EvalResult
-eval (Located (SNumber num) _) = return (RNumber num)
-eval (Located (SBool boolean) _) = return (RBool boolean)
-eval (Located (SStr str) _) = return (RStr str)
-eval (Located (SSymbol sId) pos) = do
-    env <- ask
-    case HM.lookup sId env of
-        Nothing -> throwError (LEEvalError EDUndefinedSymbol pos)
-        Just val -> return val
-eval (Located (SList []) _) = return (RList [])
-eval (Located (SList (fnExpr : argsExpr)) pos) = do
-    fnVal <- eval fnExpr
-    case fnVal of
-        RSpecialForm func -> func argsExpr
-        RPrimitive primitive -> do
-            vals <- mapM eval argsExpr
-            let argsVal = zipWith (\v (Located _ exprPos) -> Located v exprPos) vals argsExpr
-            primitive argsVal
-        RClosure cArgs cContent cEnv -> do
-            args <- mapM eval argsExpr
-            nestedEnv <- bindArgs cArgs args cEnv pos
-            local (const nestedEnv) (eval cContent)
-        _ -> throwError (LEEvalError EDInvalidFunction pos)
+eval (Located expr pos) = case expr of
+    SNumber num -> return (RNumber num)
+    SBool boolean -> return (RBool boolean)
+    SStr str -> return (RStr str)
+    SSymbol sId -> do
+        env <- ask
+        case HM.lookup sId env of
+            Nothing -> throwError (LEEvalError EDUndefinedSymbol pos)
+            Just val -> return val
+    SList [] -> return (RList [])
+    SList (fnExpr : argsExpr) -> do
+        fnVal <- eval fnExpr
+        case fnVal of
+            RSpecialForm func -> func argsExpr
+            RPrimitive primitive -> do
+                vals <- mapM eval argsExpr
+                let argsVal = zipWith (\v (Located _ exprPos) -> Located v exprPos) vals argsExpr
+                primitive argsVal
+            RClosure cArgs cContent cEnv -> do
+                args <- mapM eval argsExpr
+                nestedEnv <- bindArgs cArgs args cEnv pos
+                local (const nestedEnv) (eval cContent)
+            _ -> throwError (LEEvalError EDInvalidFunction pos)
   where
     bindArgs :: [SymbolId] -> [EvalResult] -> Env -> Position -> Eval Env
     bindArgs ks vs env argPos
