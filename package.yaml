@@ -48,6 +48,9 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - crisp
+    - mtl
+    - text
+    - unordered-containers
 
 tests:
   crisp-test:

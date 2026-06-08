@@ -6,7 +6,8 @@ module ProgramHelpers (
     showSExpr,
 ) where
 
-import AST (Number (..), SExpr (..))
+import AST (SExpr (..))
+import Numbers (Number (..))
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL

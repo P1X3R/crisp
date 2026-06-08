@@ -31,7 +31,6 @@ library
       Eval
       LanguageError
       Lexer
-      Lib
       Location
       Numbers
       Symbols
@@ -63,6 +62,9 @@ executable crisp-exe
   build-depends:
       base >=4.7 && <5
     , crisp
+    , mtl
+    , text
+    , unordered-containers
   default-language: Haskell2010
 
 test-suite crisp-test
