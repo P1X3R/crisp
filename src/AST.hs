@@ -2,8 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module AST (
-    Number (..),
     SExpr (..),
+    ASTParserState (..),
     runAST,
 ) where
 
@@ -13,12 +13,11 @@ import Control.Monad.State.Strict (MonadState (get, put), StateT (runStateT), ge
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
-import Data.Tuple (swap)
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..))
-import Location (Located (..), Position (Position, pColumn, pLine))
+import Location (Located (..), Position (..))
 import Numbers (Number (..))
-import Symbols (SymbolId (..), specialSymbols, specialSymbolsNumber, symQuote)
+import Symbols (SymbolId (..), symQuote)
 
 newtype ASTParser a = Parser {runASTParser :: StateT ASTParserState (Except LangError) a}
     deriving (Applicative, Functor, Monad, MonadState ASTParserState, MonadError LangError)
@@ -147,18 +146,5 @@ genAST acc = do
             expr <- parseToken
             genAST (expr : acc)
 
-runAST :: [Located Token] -> Either LangError ([Located SExpr], HM.HashMap SymbolId T.Text)
-runAST tokens = do
-    (ast, (ASTParserState _ idMap _ _)) <-
-        runExcept $
-            (runParser [])
-                ( ASTParserState
-                    { aCurrentId = SymbolId (specialSymbolsNumber + 1)
-                    , aIdNameMap = HM.fromList (map swap specialSymbols)
-                    , aNameIdMap = HM.fromList specialSymbols
-                    , aTokenStream = tokens
-                    }
-                )
-    Right (ast, idMap)
-  where
-    runParser = runStateT . runASTParser . genAST
+runAST :: ASTParserState -> Either LangError ([Located SExpr], ASTParserState)
+runAST state = runExcept $ (runStateT . runASTParser . genAST) [] state

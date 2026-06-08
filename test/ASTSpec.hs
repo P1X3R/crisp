@@ -3,7 +3,7 @@
 
 module ASTSpec (spec) where
 
-import AST (SExpr (..), runAST)
+import AST (ASTParserState (..), SExpr (..), runAST)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import Data.Tuple (swap)
@@ -23,6 +23,17 @@ pos = Position 1 1
 locate :: [a] -> [Located a]
 locate l = [Located e pos | e <- l]
 
+runASTDef :: [Located Token] -> Either LangError ([Located SExpr], HM.HashMap SymbolId T.Text, SymbolId)
+runASTDef tokens = do
+    let initialState = ASTParserState
+            { aCurrentId = SymbolId $ length specialSymbols
+            , aIdNameMap = HM.fromList (map swap specialSymbols)
+            , aNameIdMap = HM.fromList specialSymbols
+            , aTokenStream = tokens
+            }
+    (ast, finalState) <- runAST initialState
+    Right (ast, aIdNameMap finalState, aCurrentId finalState)
+
 -- Helper to construct the expected environment map alongside any dynamic identifiers
 buildExpectedMap :: [(SymbolId, T.Text)] -> HM.HashMap SymbolId T.Text
 buildExpectedMap dynamics = HM.union (HM.fromList dynamics) (HM.fromList $ map swap specialSymbols)
@@ -37,7 +48,7 @@ spec = do
             tokInitial <- case runTokenizer srcInitial of
                 Left err -> annotateShow err >> failure
                 Right tok -> return tok
-            (astListInitial, idMapInitial) <- evalEither $ runAST tokInitial
+            (astListInitial, idMapInitial, _) <- evalEither $ runASTDef tokInitial
             astInitial <- case astListInitial of
                 [ast] -> return ast
                 [] -> footnote "Parser returned an empty AST list" >> failure
@@ -60,7 +71,7 @@ spec = do
                     footnoteShow astInitial
                     failure
                 Right tok -> return tok
-            (astListFinal, _) <- evalEither $ runAST tokFinal
+            (astListFinal, _, _) <- evalEither $ runASTDef tokFinal
             astFinal <- case astListFinal of
                 [ast] -> return ast
                 [] -> footnote "Second pass returned an empty AST list" >> failure
@@ -89,7 +100,7 @@ spec = do
                         , SSymbol 19
                         ]
 
-            runAST tokens `shouldBe` Right (expectedAst, buildExpectedMap [(19, "a")])
+            runASTDef tokens `shouldBe` Right (expectedAst, buildExpectedMap [(19, "a")], SymbolId 20)
 
         it "parses flat atoms successfully" $ do
             -- 42 #t "hello"
@@ -106,7 +117,7 @@ spec = do
                     , Located (SStr "hello") pos
                     ]
 
-            runAST tokens `shouldBe` Right (expectedAst, buildExpectedMap [])
+            runASTDef tokens `shouldBe` Right (expectedAst, buildExpectedMap [], SymbolId $ length specialSymbols)
 
         it "parses standard S-Expressions and tracks symbols" $ do
             -- (add 1.5 2)
@@ -131,7 +142,7 @@ spec = do
                     ]
             let expectedIdMap = buildExpectedMap [(19, "add")]
 
-            runAST tokens `shouldBe` Right (expectedAST, expectedIdMap)
+            runASTDef tokens `shouldBe` Right (expectedAST, expectedIdMap, SymbolId $ length specialSymbols + 1)
 
         it "handles nested lists correctly" $ do
             -- ( ( 42 ) )
@@ -146,7 +157,7 @@ spec = do
                         ]
             let expectedAST = [Located (SList [Located (SList [Located (SNumber (NInt 42)) pos]) pos]) pos]
 
-            runAST tokens `shouldBe` Right (expectedAST, buildExpectedMap [])
+            runASTDef tokens `shouldBe` Right (expectedAST, buildExpectedMap [], SymbolId $ length specialSymbols)
 
         it "parses quoted expressions" $ do
             -- '(1 2)
@@ -184,8 +195,8 @@ spec = do
                         pos
                     ]
 
-            runAST tokens_sugar `shouldBe` Right (expectedAST, buildExpectedMap [])
-            runAST tokens_without_sugar `shouldBe` Right (expectedAST, buildExpectedMap [])
+            runASTDef tokens_sugar `shouldBe` Right (expectedAST, buildExpectedMap [], SymbolId $ length specialSymbols)
+            runASTDef tokens_without_sugar `shouldBe` Right (expectedAST, buildExpectedMap [], SymbolId $ length specialSymbols)
 
     describe "runAST error handling" $ do
         it "catches unclosed lists" $ do
@@ -197,7 +208,7 @@ spec = do
                         , TEof
                         ]
 
-            runAST tokens `shouldBe` Left (LEASTError PDUnclosedList pos)
+            runASTDef tokens `shouldBe` Left (LEASTError PDUnclosedList pos)
 
         it "catches extra parenthesis" $ do
             -- ())
@@ -209,7 +220,7 @@ spec = do
                         , TEof
                         ]
 
-            runAST tokens `shouldBe` Left (LEASTError PDExtraParenthesis pos)
+            runASTDef tokens `shouldBe` Left (LEASTError PDExtraParenthesis pos)
 
         it "catches empty quote" $ do
             -- ''
@@ -220,4 +231,4 @@ spec = do
                         , TEof
                         ]
 
-            runAST tokens `shouldBe` Left (LEASTError PDEmptyQuote pos)
+            runASTDef tokens `shouldBe` Left (LEASTError PDEmptyQuote pos)
