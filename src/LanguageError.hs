@@ -23,7 +23,6 @@ data LexerDetail
     | LDUnclosedString
     | LDInvalidBool
     | LDInvalidSymbolChar
-    | LDExtraParenthesis
     | LDNoMatch
     deriving (Show, Eq)
 
