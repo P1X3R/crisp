@@ -2,18 +2,18 @@
 
 module Main (main) where
 
-import AST (ASTParserState (..), runAST)
+import AST (ASTParserState (..), SExpr, runAST)
 import Control.Monad.Except (runExcept)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
+import qualified Data.Text.IO.Utf8 as TIO
 import Data.Tuple (swap)
 import Eval (Eval (runEval), EvalCtx (..), EvalResult (..), eval, initialEnv)
 import LanguageError (ASTDetail (..), ArgNumMismatch (..), EvalDetail (..), LangError (..), LexerDetail (..), TypeMismatch (..))
 import Lexer (runTokenizer)
-import Location (Position (..))
+import Location (Located, Position (..))
 import Numbers (Number (..))
 import Numeric (showFFloat)
 import Symbols (SymbolId (SymbolId), specialSymbols)
@@ -79,14 +79,27 @@ renderEvalResult res = case res of
     RPrint val -> renderEvalResult val
     _ -> ""
 
-pipeline :: T.Text -> ASTParserState -> EvalCtx -> Either LangError ([EvalResult], ASTParserState)
-pipeline src astState evalCtx = do
+evalExpr :: Located SExpr -> EvalCtx -> Either LangError EvalResult
+evalExpr expr ctx = runExcept $ runReaderT (runEval (eval expr)) ctx
+
+pipeline :: T.Text -> ASTParserState -> Either LangError ([Located SExpr], ASTParserState)
+pipeline src astState = do
     tokens <- runTokenizer src
-    (ast, newAstState) <- runAST astState{aTokenStream = tokens}
-    res <- traverse (`evalExpr` evalCtx) ast
-    return (res, newAstState)
-  where
-    evalExpr expr ctx = runExcept $ runReaderT (runEval (eval expr)) ctx
+    runAST astState{aTokenStream = tokens}
+
+consumeResults :: T.Text -> EvalCtx -> (EvalResult -> IO ()) -> [Located SExpr] -> IO EvalCtx
+consumeResults _ ctx _ [] = return ctx
+consumeResults src ctx printer (y : ys) = case evalExpr y ctx of
+    Left err -> do
+        TIO.putStrLn $ renderErrorMsg src err
+        return ctx
+    Right res -> do
+        printer res
+        let EvalCtx _ globalEnv = ctx
+        let nextEnv = case res of
+                RBinding key val -> HM.insert key val globalEnv
+                _ -> globalEnv
+        consumeResults src (EvalCtx nextEnv nextEnv) printer ys
 
 repl :: EvalCtx -> ASTParserState -> IO ()
 repl evalCtx astState = do
@@ -94,19 +107,39 @@ repl evalCtx astState = do
     src <- TIO.getLine
     case src of
         ",q" -> TIO.putStrLn "Bye!"
-        _ -> case pipeline src astState evalCtx of
+        _ -> case pipeline src astState of
             Left err -> do
                 TIO.putStrLn $ renderErrorMsg src err
                 repl evalCtx astState
             Right (results, nextAstState) -> case results of
                 [] -> repl evalCtx astState
-                (res : _) -> do
-                    TIO.putStrLn $ renderEvalResult res
-                    let EvalCtx _ globalEnv = evalCtx
-                    let nextEnv = case res of
-                            RBinding key val -> HM.insert key val globalEnv
-                            _ -> globalEnv
-                    repl (EvalCtx nextEnv nextEnv) nextAstState
+                xs -> do
+                    finalCtx <- consumeResults src evalCtx (TIO.putStrLn . renderEvalResult) xs
+                    repl finalCtx nextAstState
+
+runFile :: String -> IO ()
+runFile path = do
+    src <- TIO.readFile path
+    case pipeline src initialASTState of
+        Left err -> TIO.putStrLn $ renderErrorMsg src err
+        Right (results, _) -> do
+            _ <- consumeResults src initialEvalCtx (printOnlyOnDisplay) results
+            return ()
+  where
+    printOnlyOnDisplay (RPrint val) = TIO.putStrLn $ renderEvalResult val
+    printOnlyOnDisplay _ = return ()
+
+initialEvalCtx :: EvalCtx
+initialEvalCtx = EvalCtx initialEnv initialEnv
+
+initialASTState :: ASTParserState
+initialASTState =
+    ASTParserState
+        { aCurrentId = SymbolId $ length specialSymbols
+        , aIdNameMap = HM.fromList (map swap specialSymbols)
+        , aNameIdMap = HM.fromList specialSymbols
+        , aTokenStream = []
+        }
 
 main :: IO ()
 main = do
@@ -114,12 +147,7 @@ main = do
     case args of
         [] -> do
             TIO.putStrLn "Exit with ,q"
-            repl (EvalCtx initialEnv initialEnv) $
-                ASTParserState
-                    { aCurrentId = SymbolId $ length specialSymbols
-                    , aIdNameMap = HM.fromList (map swap specialSymbols)
-                    , aNameIdMap = HM.fromList specialSymbols
-                    , aTokenStream = []
-                    }
-        [path] -> undefined
+            repl (EvalCtx initialEnv initialEnv) initialASTState
+        [path] -> runFile path
         _ -> putStrLn "Usage: crisp [file path]"
+
