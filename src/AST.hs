@@ -16,7 +16,7 @@ import qualified Data.Text.Read as TR
 import Data.Tuple (swap)
 import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..))
-import Location (Located (..), Position (Position))
+import Location (Located (..), Position (Position, pColumn, pLine))
 import Numbers (Number (..))
 import Symbols (SymbolId (..), specialSymbols, specialSymbolsNumber, symQuote)
 
@@ -62,16 +62,19 @@ peekToken = do
         [] -> empty
         (t : _) -> return t
 
+panicForNumber :: T.Text -> T.Text
+panicForNumber num = "malformed number " <> num <> " reached ast parsing"
+
 parseAtom :: ASTParser (Located SExpr)
 parseAtom = do
     Located tok pos <- popToken
     expr <- case tok of
         TNumber number NTFloat -> case TR.double number of
             Right (parsed, _) -> return (SNumber $ NFloat parsed)
-            Left _ -> throwError (LEASTError PDInvalidNumber pos)
+            Left _ -> throwError (LEASTError (PDCriticalBug $ panicForNumber number) pos)
         TNumber number NTInt -> case TR.signed TR.decimal number of
             Right (parsed, _) -> return (SNumber $ NInt parsed)
-            Left _ -> throwError (LEASTError PDInvalidNumber pos)
+            Left _ -> throwError (LEASTError (PDCriticalBug $ panicForNumber number) pos)
         TBoolean bool -> return (SBool bool)
         TString content -> return (SStr content)
         TSymbol name -> do

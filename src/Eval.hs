@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Eval (
 
@@ -9,7 +10,7 @@ import Control.Monad.Except (Except, MonadError (throwError))
 import Control.Monad.Reader (MonadReader (ask, local), ReaderT)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
-import LanguageError (EvalDetail (..), LangError (..))
+import LanguageError (ArgNumMismatch (..), EvalDetail (..), LangError (..), TypeMismatch (..))
 import Location (Located (..), Position)
 import Numbers (Number (..), compareNums)
 import Symbols (SymbolId)
@@ -31,6 +32,25 @@ type Env = HM.HashMap SymbolId EvalResult
 newtype Eval a = Eval {runEval :: ReaderT Env (Except LangError) a}
     deriving (Monad, Applicative, Functor, MonadError LangError, MonadReader Env)
 
+getSExprTypeName :: SExpr -> T.Text
+getSExprTypeName (SNumber _) = "number"
+getSExprTypeName (SBool _) = "boolean"
+getSExprTypeName (SStr _) = "string"
+getSExprTypeName (SList _) = "list"
+getSExprTypeName (SSymbol _) = "symbol"
+
+getEvalResultTypeName :: EvalResult -> T.Text
+getEvalResultTypeName (RNumber _) = "number"
+getEvalResultTypeName (RBool _) = "boolean"
+getEvalResultTypeName (RStr _) = "string"
+getEvalResultTypeName (RList _) = "list"
+getEvalResultTypeName (RSymbol _) = "symbol"
+getEvalResultTypeName (RBinding _ _) = "<binding>"
+getEvalResultTypeName (RPrint _) = "<display>"
+getEvalResultTypeName (RSpecialForm _) = "<special form>"
+getEvalResultTypeName (RPrimitive _) = "<primitive>"
+getEvalResultTypeName (RClosure _ _ _) = "<closure>"
+
 specialFormQuote :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormQuote pos args = case args of
     [Located (SNumber num) _] -> return (RNumber num)
@@ -39,15 +59,15 @@ specialFormQuote pos args = case args of
     [Located (SList elements) _] -> do
         content <- mapM (\e -> specialFormQuote pos [e]) elements
         return (RList content)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "quote") 1 (length args))) pos)
 
 specialFormDefine :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormDefine pos args = case args of
     [Located (SSymbol sId) _, expr] -> do
         val <- eval expr
         return (RBinding sId val)
-    [Located _ symPos, _] -> throwError (LEEvalError EDInvalidArg symPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located nonSym symPos, _] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "symbol" (getSExprTypeName nonSym))) symPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "define") 2 (length args))) pos)
 
 specialFormIf :: Position -> [Located SExpr] -> Eval EvalResult
 specialFormIf pos args = case args of
@@ -56,21 +76,21 @@ specialFormIf pos args = case args of
         case condVal of
             RBool False -> eval alt
             _ -> eval conseq
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "if") 3 (length args))) pos)
 
 specialFormLambda :: Position -> Env -> [Located SExpr] -> Eval EvalResult
 specialFormLambda pos env args = case args of
     [Located (SList argList) _, body] -> do
         idList <- getIds argList []
         return (RClosure idList body env)
-    [Located _ argsPos, _] -> throwError (LEEvalError EDInvalidArg argsPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located nonList argsPos, _] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getSExprTypeName nonList))) argsPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "lambda") 2 (length args))) pos)
   where
     getIds :: [Located SExpr] -> [SymbolId] -> Eval [SymbolId]
     getIds exprs acc = case exprs of
         [] -> return (reverse acc)
         (Located (SSymbol sId) _ : xs) -> getIds xs (sId : acc)
-        (Located _ idPos : _) -> throwError (LEEvalError EDInvalidArg idPos)
+        (Located nonSym idPos : _) -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "symbol" (getSExprTypeName nonSym))) idPos)
 
 -- Behaves more like `let*` rather than `let` from Racket
 specialFormLet :: Position -> [Located SExpr] -> Eval EvalResult
@@ -79,8 +99,8 @@ specialFormLet pos args = case args of
         env <- ask
         extendedEnv <- parseBindings bindings env
         local (const extendedEnv) (eval body)
-    [Located _ argsPos, _] -> throwError (LEEvalError EDInvalidArg argsPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located nonList argsPos, _] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getSExprTypeName nonList))) argsPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "let") 2 (length args))) pos)
   where
     parseBindings :: [Located SExpr] -> Env -> Eval Env
     parseBindings b acc = case b of
@@ -88,31 +108,31 @@ specialFormLet pos args = case args of
         (Located (SList [Located (SSymbol sId) _, expr]) _ : xs) -> do
             val <- local (const acc) (eval expr)
             parseBindings xs (HM.insert sId val acc)
-        (Located (SList (Located _ sPos : _)) _ : _) -> throwError (LEEvalError EDInvalidArg sPos)
-        (Located (SList _) listPos : _) -> throwError (LEEvalError EDWrongArgNumber listPos)
-        (Located _ listPos : _) -> throwError (LEEvalError EDInvalidArg listPos)
+        (Located (SList (Located nonSym sPos : _)) _ : _) -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "symbol" (getSExprTypeName nonSym))) sPos)
+        (Located (SList argsList) listPos : _) -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "let-binding") 2 (length argsList))) listPos)
+        (Located nonList listPos : _) -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getSExprTypeName nonList))) listPos)
 
 primCommutativeOp :: (Number -> Number -> Number) -> [Located EvalResult] -> Number -> Eval EvalResult
 primCommutativeOp op args acc = case args of
     [] -> return (RNumber acc)
     (Located (RNumber num) _ : cs) ->
         primCommutativeOp op cs (num `op` acc)
-    (Located _ pos : _) -> throwError (LEEvalError EDInvalidArg pos)
+    (Located nonNum pos : _) -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "number" (getEvalResultTypeName nonNum))) pos)
 
-primArithmeticOp :: Position -> Number -> (Number -> Number -> Number) -> Bool -> [Located EvalResult] -> Eval EvalResult
-primArithmeticOp pos base operation allowZero args = case args of
-    [] -> throwError (LEEvalError EDWrongArgNumber pos)
+primArithmeticOp :: T.Text -> Position -> Number -> (Number -> Number -> Number) -> Bool -> [Located EvalResult] -> Eval EvalResult
+primArithmeticOp opName pos base operation allowZero args = case args of
+    [] -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just opName) 1 0)) pos)
     [Located val argPos] -> case val of
         RNumber num ->
             if not allowZero && isZero num
-                then throwError (LEEvalError EDInvalidArg argPos)
+                then throwError (LEEvalError EDDivisionByZero argPos)
                 else return (RNumber $ base `operation` num)
-        _ -> throwError (LEEvalError EDInvalidArg argPos)
+        _ -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "number" (getEvalResultTypeName val))) argPos)
     (Located firstVal firstPos : cs) -> case firstVal of
         RNumber firstNum -> do
             res <- calculate cs firstNum
             return (RNumber res)
-        _ -> throwError (LEEvalError EDInvalidArg firstPos)
+        _ -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "number" (getEvalResultTypeName firstVal))) firstPos)
   where
     isZero (NInt 0) = True
     isZero (NFloat 0.0) = True
@@ -121,42 +141,43 @@ primArithmeticOp pos base operation allowZero args = case args of
     calculate :: [Located EvalResult] -> Number -> Eval Number
     calculate [] acc = return acc
     calculate (Located (RNumber x) numPos : xs) acc
-        | allowZero && isZero x = throwError (LEEvalError EDInvalidArg numPos)
+        | not allowZero && isZero x = throwError (LEEvalError EDDivisionByZero numPos)
         | otherwise = calculate xs (acc `operation` x)
-    calculate (Located _ argPos : _) _ = throwError (LEEvalError EDInvalidArg argPos)
+    calculate (Located nonNum argPos : _) _ = throwError (LEEvalError (EDTypeMismatch (TypeMismatch "number" (getEvalResultTypeName nonNum))) argPos)
 
-primComparisonOp :: Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
-primComparisonOp pos ordering args = case args of
-    [Located (RNumber a) _, Located (RNumber b) _] ->
-        return (RBool $ compareNums a b == ordering)
-    [Located _ pos1, Located _ _] -> throwError (LEEvalError EDInvalidArg pos1)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+primComparisonOp :: T.Text -> Position -> Ordering -> [Located EvalResult] -> Eval EvalResult
+primComparisonOp opName pos ordering args = case args of
+    [Located val1 pos1, Located val2 pos2] -> case (val1, val2) of
+        (RNumber a, RNumber b) -> return (RBool $ compareNums a b == ordering)
+        (RNumber _, nonNum) -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "number" (getEvalResultTypeName nonNum))) pos2)
+        (nonNum, _) -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "number" (getEvalResultTypeName nonNum))) pos1)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just opName) 2 (length args))) pos)
 
 primNot :: Position -> [Located EvalResult] -> Eval EvalResult
 primNot pos args = case args of
     [Located (RBool b) _] -> return (RBool $ not b)
-    [Located _ argPos] -> throwError (LEEvalError EDInvalidArg argPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located val argPos] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "boolean" (getEvalResultTypeName val))) argPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "not") 1 (length args))) pos)
 
 primCons :: Position -> [Located EvalResult] -> Eval EvalResult
 primCons pos args = case args of
     [Located x _, Located (RList xs) _] -> return (RList (x : xs))
-    [Located _ _, Located _ argPos] -> throwError (LEEvalError EDInvalidArg argPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located _ _, Located val argPos] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getEvalResultTypeName val))) argPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "cons") 2 (length args))) pos)
 
 primCar :: Position -> [Located EvalResult] -> Eval EvalResult
 primCar pos args = case args of
     [Located (RList (c : _)) _] -> return c
-    [Located (RList []) argPos] -> throwError (LEEvalError EDInvalidArg argPos) -- Catch empty car
-    [Located _ argPos] -> throwError (LEEvalError EDInvalidArg argPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located (RList []) argPos] -> throwError (LEEvalError (EDEmptyListOperation "car") argPos)
+    [Located val argPos] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getEvalResultTypeName val))) argPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "car") 1 (length args))) pos)
 
 primCdr :: Position -> [Located EvalResult] -> Eval EvalResult
 primCdr pos args = case args of
     [Located (RList (_ : cs)) _] -> return (RList cs)
-    [Located (RList []) argPos] -> throwError (LEEvalError EDInvalidArg argPos) -- Catch empty cdr
-    [Located _ argPos] -> throwError (LEEvalError EDInvalidArg argPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located (RList []) argPos] -> throwError (LEEvalError (EDEmptyListOperation "cdr") argPos)
+    [Located val argPos] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getEvalResultTypeName val))) argPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "cdr") 1 (length args))) pos)
 
 primList :: Position -> [Located EvalResult] -> Eval EvalResult
 primList _ args = return (RList [x | Located x _ <- args])
@@ -164,13 +185,13 @@ primList _ args = return (RList [x | Located x _ <- args])
 primNull :: Position -> [Located EvalResult] -> Eval EvalResult
 primNull pos args = case args of
     [Located (RList content) _] -> return (RBool $ null content)
-    [Located _ argPos] -> throwError (LEEvalError EDInvalidArg argPos)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    [Located val argPos] -> throwError (LEEvalError (EDTypeMismatch (TypeMismatch "list" (getEvalResultTypeName val))) argPos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "null?") 1 (length args))) pos)
 
 primDisplay :: Position -> [Located EvalResult] -> Eval EvalResult
 primDisplay pos args = case args of
     [Located val _] -> return (RPrint val)
-    _ -> throwError (LEEvalError EDWrongArgNumber pos)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "display") 1 (length args))) pos)
 
 eval :: Located SExpr -> Eval EvalResult
 eval (Located expr pos) = case expr of
@@ -180,7 +201,7 @@ eval (Located expr pos) = case expr of
     SSymbol sId -> do
         env <- ask
         case HM.lookup sId env of
-            Nothing -> throwError (LEEvalError EDUndefinedSymbol pos)
+            Nothing -> throwError (LEEvalError (EDUndefinedSymbol sId) pos)
             Just val -> return val
     SList [] -> return (RList [])
     SList (fnExpr : argsExpr) -> do
@@ -195,9 +216,10 @@ eval (Located expr pos) = case expr of
                 args <- mapM eval argsExpr
                 nestedEnv <- bindArgs cArgs args cEnv pos
                 local (const nestedEnv) (eval cContent)
-            _ -> throwError (LEEvalError EDInvalidFunction pos)
+            _ -> throwError (LEEvalError (EDNotAFunction (getEvalResultTypeName fnVal)) pos)
   where
     bindArgs :: [SymbolId] -> [EvalResult] -> Env -> Position -> Eval Env
     bindArgs ks vs env argPos
-        | length ks /= length vs = throwError (LEEvalError EDWrongArgNumber argPos)
+        | length ks /= length vs =
+            throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch Nothing (length ks) (length vs))) argPos)
         | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
