@@ -94,6 +94,7 @@ specialFormQuote pos env args = case args of
     [Located (SNumber num) _] -> return (RNumber num)
     [Located (SBool boolean) _] -> return (RBool boolean)
     [Located (SSymbol sId) _] -> return (RSymbol sId)
+    [Located (SStr content) _] -> return (RStr content)
     [Located (SList elements) _] -> do
         content <- mapM (\e -> specialFormQuote pos env [e]) elements
         return (RList content)
