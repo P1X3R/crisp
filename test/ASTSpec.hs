@@ -25,12 +25,13 @@ locate l = [Located e pos | e <- l]
 
 runASTDef :: [Located Token] -> Either LangError ([Located SExpr], HM.HashMap SymbolId T.Text, SymbolId)
 runASTDef tokens = do
-    let initialState = ASTParserState
-            { aCurrentId = SymbolId $ length specialSymbols
-            , aIdNameMap = HM.fromList (map swap specialSymbols)
-            , aNameIdMap = HM.fromList specialSymbols
-            , aTokenStream = tokens
-            }
+    let initialState =
+            ASTParserState
+                { aCurrentId = SymbolId $ length specialSymbols
+                , aIdNameMap = HM.fromList (map swap specialSymbols)
+                , aNameIdMap = HM.fromList specialSymbols
+                , aTokenStream = tokens
+                }
     (ast, finalState) <- runAST initialState
     Right (ast, aIdNameMap finalState, aCurrentId finalState)
 
@@ -85,6 +86,7 @@ spec = do
 
         it "same symbol has the same id" $ do
             -- a a a
+            let symbolId = SymbolId $ length specialSymbols
             let tokens =
                     locate
                         [ TSymbol "a"
@@ -95,12 +97,12 @@ spec = do
             -- Next free dynamic id starts at 19
             let expectedAst =
                     locate
-                        [ SSymbol 20
-                        , SSymbol 20
-                        , SSymbol 20
+                        [ SSymbol symbolId
+                        , SSymbol symbolId
+                        , SSymbol symbolId
                         ]
 
-            runASTDef tokens `shouldBe` Right (expectedAst, buildExpectedMap [(20, "a")], SymbolId 21)
+            runASTDef tokens `shouldBe` Right (expectedAst, buildExpectedMap [(symbolId, "a")], symbolId + 1)
 
         it "parses flat atoms successfully" $ do
             -- 42 #t "hello"
@@ -121,6 +123,7 @@ spec = do
 
         it "parses standard S-Expressions and tracks symbols" $ do
             -- (add 1.5 2)
+            let addId = SymbolId $ length specialSymbols
             let tokens =
                     locate
                         [ TLeftParen
@@ -133,14 +136,14 @@ spec = do
             let expectedAST =
                     [ Located
                         ( SList
-                            [ Located (SSymbol (SymbolId 20)) pos
+                            [ Located (SSymbol addId) pos
                             , Located (SNumber (NFloat 1.5)) pos
                             , Located (SNumber (NInt 2)) pos
                             ]
                         )
                         pos
                     ]
-            let expectedIdMap = buildExpectedMap [(20, "add")]
+            let expectedIdMap = buildExpectedMap [(addId, "add")]
 
             runASTDef tokens `shouldBe` Right (expectedAST, expectedIdMap, SymbolId $ length specialSymbols + 1)
 
