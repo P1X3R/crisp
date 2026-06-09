@@ -31,7 +31,7 @@ getErrorMsg (LELexerError err _) = case err of
     LDInvalidNumber -> "invalid number format"
     LDUnclosedString -> "found unclosed string"
     LDInvalidBool -> "boolean literals should only be `#f` or `#t`"
-    LDInvalidSymbolChar -> "Unallowed character"
+    LDInvalidSymbolChar -> "unallowed character"
     LDNoMatch -> "no lexer parser could parse correctly this expression"
 getErrorMsg (LEASTError err _) = case err of
     PDUnclosedList -> "found `(` but without closing `)`"
@@ -48,7 +48,6 @@ getErrorMsg (LEEvalError err _) = case err of
     EDDivisionByZero -> "attempted to divide by zero"
     EDEmptyListOperation opName -> "tried to call empty " <> opName <> " operation"
 
--- Much more idiomatic and performant using built-in T.lines
 getLineAt :: Int -> T.Text -> Maybe T.Text
 getLineAt n txt
     | n <= 0 = Nothing
