@@ -100,13 +100,37 @@ consumeResults src ctx printer (y : ys) = case evalExpr y ctx of
                 _ -> globalEnv
         consumeResults src (EvalCtx nextEnv nextEnv) printer ys
 
+collectInput :: Int -> T.Text -> IO (Maybe T.Text)
+collectInput nestingLevel acc = do
+    if nestingLevel > 0
+        then TIO.putStr "....> " >> hFlush stdout
+        else TIO.putStr "crisp> " >> hFlush stdout
+
+    line <- TIO.getLine
+
+    if T.strip line == ",q" && nestingLevel == 0
+        then return Nothing -- Signal exit
+        else do
+            let newAcc = if T.null acc then line else acc <> "\n" <> line
+                currentBalance = countParens line
+                newNestingLevel = nestingLevel + currentBalance
+
+            if newNestingLevel <= 0 && not (T.null (T.strip newAcc))
+                then return (Just newAcc)
+                else collectInput (max 0 newNestingLevel) newAcc
+  where
+    countParens :: T.Text -> Int
+    countParens txt =
+        let opens = T.count "(" txt
+            closes = T.count ")" txt
+         in opens - closes
+
 repl :: EvalCtx -> ASTParserState -> IO ()
 repl evalCtx astState = do
-    TIO.putStr "crisp> " >> hFlush stdout
-    src <- TIO.getLine
-    case src of
-        ",q" -> TIO.putStrLn "Bye!"
-        _ -> case pipeline src astState of
+    maybeSrc <- collectInput 0 T.empty
+    case maybeSrc of
+        Nothing -> TIO.putStrLn "Bye!"
+        Just src -> case pipeline src astState of
             Left err -> do
                 TIO.putStrLn $ renderErrorMsg src err
                 repl evalCtx astState
@@ -149,4 +173,3 @@ main = do
             repl (EvalCtx initialEnv initialEnv) initialASTState
         [path] -> runFile path
         _ -> putStrLn "Usage: crisp [file path]"
-
