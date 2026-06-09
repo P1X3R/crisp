@@ -87,6 +87,7 @@ initialEnv =
         , (symList, RPrimitive primList)
         , (symIsNull, RPrimitive primNull)
         , (symDisplay, RPrimitive primDisplay)
+        , (symEqual, RPrimitive primEqual)
         ]
 
 specialFormQuote :: SpecialForm
@@ -232,6 +233,18 @@ primDisplay :: Primitive
 primDisplay pos args = case args of
     [Located val _] -> return (RPrint val)
     _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "display") 1 (length args))) pos)
+
+primEqual :: Primitive
+primEqual pos args = case args of
+    [Located a _, Located b _] -> return (RBool $ a `eq` b)
+    _ -> throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch (Just "equal?") 2 (length args))) pos)
+  where
+    eq :: EvalResult -> EvalResult -> Bool
+    eq (RNumber a) (RNumber b) = compareNums a b == EQ
+    eq (RBool a) (RBool b) = a == b
+    eq (RStr a) (RStr b) = a == b
+    eq (RList a) (RList b) = length a == length b && and (zipWith eq a b)
+    eq _ _ = False
 
 eval :: Located SExpr -> Eval EvalResult
 eval (Located expr pos) = case expr of

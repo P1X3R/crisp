@@ -22,8 +22,8 @@ module Symbols (
     symList,
     symIsNull,
     symDisplay,
+    symEqual,
     specialSymbols,
-    specialSymbolsNumber,
 ) where
 
 import Data.Hashable (Hashable (..))
@@ -38,7 +38,7 @@ instance Hashable SymbolId where
 -- Hardcoded constants for rapid querying
 symQuote, symDefine, symIf, symLambda, symLet :: SymbolId
 symPlus, symMinus, symMult, symDiv, symEq, symGt, symLt :: SymbolId
-symNot, symCons, symCar, symCdr, symList, symIsNull, symDisplay :: SymbolId
+symNot, symCons, symCar, symCdr, symList, symIsNull, symDisplay, symEqual :: SymbolId
 symQuote = SymbolId 0
 symDefine = SymbolId 1
 symIf = SymbolId 2
@@ -59,6 +59,7 @@ symCdr = SymbolId 15
 symList = SymbolId 16
 symIsNull = SymbolId 17
 symDisplay = SymbolId 18
+symEqual = SymbolId 19
 
 specialSymbols :: [(Text, SymbolId)]
 specialSymbols =
@@ -81,7 +82,5 @@ specialSymbols =
     , ("list", symList)
     , ("null?", symIsNull)
     , ("display", symDisplay)
+    , ("equal?", symEqual)
     ]
-
-specialSymbolsNumber :: Int
-specialSymbolsNumber = 18

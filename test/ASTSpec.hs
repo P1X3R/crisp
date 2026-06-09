@@ -95,12 +95,12 @@ spec = do
             -- Next free dynamic id starts at 19
             let expectedAst =
                     locate
-                        [ SSymbol 19
-                        , SSymbol 19
-                        , SSymbol 19
+                        [ SSymbol 20
+                        , SSymbol 20
+                        , SSymbol 20
                         ]
 
-            runASTDef tokens `shouldBe` Right (expectedAst, buildExpectedMap [(19, "a")], SymbolId 20)
+            runASTDef tokens `shouldBe` Right (expectedAst, buildExpectedMap [(20, "a")], SymbolId 21)
 
         it "parses flat atoms successfully" $ do
             -- 42 #t "hello"
@@ -133,14 +133,14 @@ spec = do
             let expectedAST =
                     [ Located
                         ( SList
-                            [ Located (SSymbol (SymbolId 19)) pos
+                            [ Located (SSymbol (SymbolId 20)) pos
                             , Located (SNumber (NFloat 1.5)) pos
                             , Located (SNumber (NInt 2)) pos
                             ]
                         )
                         pos
                     ]
-            let expectedIdMap = buildExpectedMap [(19, "add")]
+            let expectedIdMap = buildExpectedMap [(20, "add")]
 
             runASTDef tokens `shouldBe` Right (expectedAST, expectedIdMap, SymbolId $ length specialSymbols + 1)
 
