@@ -33,6 +33,7 @@ library
       Lexer
       Location
       Numbers
+      Rendering
       Symbols
   other-modules:
       Paths_crisp
@@ -72,6 +73,7 @@ test-suite crisp-test
   main-is: Spec.hs
   other-modules:
       ASTSpec
+      GoldenSpec
       LexerSpec
       ProgramHelpers
       Paths_crisp
@@ -85,6 +87,7 @@ test-suite crisp-test
     , crisp
     , hedgehog
     , hspec
+    , hspec-golden
     , hspec-hedgehog
     , text
     , unordered-containers

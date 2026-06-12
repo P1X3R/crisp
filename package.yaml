@@ -65,5 +65,6 @@ tests:
     - hspec
     - hedgehog
     - hspec-hedgehog
+    - hspec-golden
     - text
     - unordered-containers
