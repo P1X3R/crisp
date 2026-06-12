@@ -5,6 +5,7 @@ module AST (
     SExpr (..),
     ASTParserState (..),
     runAST,
+    initialASTState,
 ) where
 
 import Control.Applicative (Alternative (empty, (<|>)))
@@ -17,7 +18,8 @@ import LanguageError (ASTDetail (..), LangError (..))
 import Lexer (NumberType (..), Token (..))
 import Location (Located (..), Position (..))
 import Numbers (Number (..))
-import Symbols (SymbolId (..), symQuote)
+import Symbols (SymbolId (..), symQuote, specialSymbols)
+import Data.Tuple (swap)
 
 newtype ASTParser a = Parser {runASTParser :: StateT ASTParserState (Except LangError) a}
     deriving (Applicative, Functor, Monad, MonadState ASTParserState, MonadError LangError)
@@ -148,3 +150,12 @@ genAST acc = do
 
 runAST :: ASTParserState -> Either LangError ([Located SExpr], ASTParserState)
 runAST state = runExcept $ (runStateT . runASTParser . genAST) [] state
+
+initialASTState :: [Located Token] -> ASTParserState
+initialASTState tokenStream =
+    ASTParserState
+        { aCurrentId = SymbolId $ length specialSymbols
+        , aIdNameMap = HM.fromList (map swap specialSymbols)
+        , aNameIdMap = HM.fromList specialSymbols
+        , aTokenStream = tokenStream
+        }

@@ -2,24 +2,16 @@
 
 module Main (main) where
 
-import AST (ASTParserState (..), SExpr, runAST)
-import Control.Monad.Except (runExcept)
-import Control.Monad.Reader (ReaderT (runReaderT))
-import qualified Data.HashMap.Strict as HM
+import AST (ASTParserState (..), SExpr, initialASTState, runAST)
 import qualified Data.Text as T
 import qualified Data.Text.IO.Utf8 as TIO
-import Data.Tuple (swap)
-import Eval (Eval (runEval), EvalCtx (..), EvalResult (..), eval, initialEnv)
+import Eval (EvalCtx (..), EvalResult (..), evalSExprs, initialEvalCtx)
 import LanguageError (LangError (..))
 import Lexer (runTokenizer)
 import Location (Located)
-import Symbols (SymbolId (SymbolId), specialSymbols)
+import Rendering (renderErrorMsg, renderEvalResult)
 import System.Environment (getArgs)
 import System.IO (hFlush, stdout)
-import Rendering (renderErrorMsg, renderEvalResult)
-
-evalExpr :: Located SExpr -> EvalCtx -> Either LangError EvalResult
-evalExpr expr ctx = runExcept $ runReaderT (runEval (eval expr)) ctx
 
 pipeline :: T.Text -> ASTParserState -> Either LangError ([Located SExpr], ASTParserState)
 pipeline src astState = do
@@ -27,18 +19,13 @@ pipeline src astState = do
     runAST astState{aTokenStream = tokens}
 
 consumeResults :: T.Text -> EvalCtx -> (EvalResult -> IO ()) -> [Located SExpr] -> IO EvalCtx
-consumeResults _ ctx _ [] = return ctx
-consumeResults src ctx printer (y : ys) = case evalExpr y ctx of
-    Left err -> do
-        TIO.putStrLn $ renderErrorMsg src err
-        return ctx
-    Right res -> do
-        printer res
-        let EvalCtx _ globalEnv = ctx
-        let nextEnv = case res of
-                RBinding key val -> HM.insert key val globalEnv
-                _ -> globalEnv
-        consumeResults src (EvalCtx nextEnv nextEnv) printer ys
+consumeResults src evalCtx printer exprs = do
+    let (evalResults, finalEvalCtx) = evalSExprs exprs evalCtx
+    mapM_ render evalResults
+    return finalEvalCtx
+    where
+        render (Left err) = TIO.putStrLn $ renderErrorMsg src err
+        render (Right res) = printer res
 
 collectInput :: Int -> T.Text -> IO (Maybe T.Text)
 collectInput nestingLevel acc = do
@@ -83,7 +70,7 @@ repl evalCtx astState = do
 runFile :: String -> IO ()
 runFile path = do
     src <- TIO.readFile path
-    case pipeline src initialASTState of
+    case pipeline src (initialASTState []) of
         Left err -> TIO.putStrLn $ renderErrorMsg src err
         Right (results, _) -> do
             _ <- consumeResults src initialEvalCtx (printOnlyOnDisplay) results
@@ -92,24 +79,12 @@ runFile path = do
     printOnlyOnDisplay (RPrint val) = TIO.putStrLn $ renderEvalResult val
     printOnlyOnDisplay _ = return ()
 
-initialEvalCtx :: EvalCtx
-initialEvalCtx = EvalCtx initialEnv initialEnv
-
-initialASTState :: ASTParserState
-initialASTState =
-    ASTParserState
-        { aCurrentId = SymbolId $ length specialSymbols
-        , aIdNameMap = HM.fromList (map swap specialSymbols)
-        , aNameIdMap = HM.fromList specialSymbols
-        , aTokenStream = []
-        }
-
 main :: IO ()
 main = do
     args <- getArgs
     case args of
         [] -> do
             TIO.putStrLn "Exit with ,q"
-            repl (EvalCtx initialEnv initialEnv) initialASTState
+            repl initialEvalCtx (initialASTState [])
         [path] -> runFile path
         _ -> putStrLn "Usage: crisp [file path]"

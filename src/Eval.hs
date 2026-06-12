@@ -8,12 +8,15 @@ module Eval (
     Eval (..),
     initialEnv,
     eval,
+    evalExpr,
+    evalSExprs,
+    initialEvalCtx,
 ) where
 
 import AST (SExpr (..))
 import Control.Applicative ((<|>))
-import Control.Monad.Except (Except, MonadError (throwError))
-import Control.Monad.Reader (MonadReader (ask, local), ReaderT)
+import Control.Monad.Except (Except, MonadError (throwError), runExcept)
+import Control.Monad.Reader (MonadReader (ask, local), ReaderT (runReaderT))
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import LanguageError (ArgNumMismatch (..), EvalDetail (..), LangError (..), TypeMismatch (..))
@@ -64,6 +67,9 @@ getEvalResultTypeName (RPrint _) = "<display>"
 getEvalResultTypeName (RSpecialForm _) = "<special form>"
 getEvalResultTypeName (RPrimitive _) = "<primitive>"
 getEvalResultTypeName (RClosure _ _ _) = "<closure>"
+
+initialEvalCtx :: EvalCtx
+initialEvalCtx = EvalCtx initialEnv initialEnv
 
 initialEnv :: Env
 initialEnv =
@@ -277,3 +283,20 @@ eval (Located expr pos) = case expr of
         | length ks /= length vs =
             throwError (LEEvalError (EDWrongArgNumber (ArgNumMismatch Nothing (length ks) (length vs))) argPos)
         | otherwise = return $ foldl' (\e (k, v) -> HM.insert k v e) env (zip ks vs)
+
+evalExpr :: Located SExpr -> EvalCtx -> Either LangError EvalResult
+evalExpr expr ctx = runExcept $ runReaderT (runEval (eval expr)) ctx
+
+evalSExprs :: [Located SExpr] -> EvalCtx -> ([Either LangError EvalResult], EvalCtx)
+evalSExprs exprs initialCtx = go exprs initialCtx []
+  where
+    go :: [Located SExpr] -> EvalCtx -> [Either LangError EvalResult] -> ([Either LangError EvalResult], EvalCtx)
+    go [] ctx acc = (reverse acc, ctx)
+    go (expr : cs) ctx@(EvalCtx _ globalEnv) acc =
+        case evalExpr expr ctx of
+            Left err -> (reverse (Left err : acc), ctx)
+            Right resVal ->
+                let nextEnv = case resVal of
+                        RBinding key val -> HM.insert key val globalEnv
+                        _ -> globalEnv
+                 in go cs (EvalCtx nextEnv nextEnv) (Right resVal : acc)
