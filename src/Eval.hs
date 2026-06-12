@@ -287,16 +287,15 @@ eval (Located expr pos) = case expr of
 evalExpr :: Located SExpr -> EvalCtx -> Either LangError EvalResult
 evalExpr expr ctx = runExcept $ runReaderT (runEval (eval expr)) ctx
 
-evalSExprs :: [Located SExpr] -> EvalCtx -> ([Either LangError EvalResult], EvalCtx)
+evalSExprs :: [Located SExpr] -> EvalCtx -> Either LangError ([EvalResult], EvalCtx)
 evalSExprs exprs initialCtx = go exprs initialCtx []
   where
-    go :: [Located SExpr] -> EvalCtx -> [Either LangError EvalResult] -> ([Either LangError EvalResult], EvalCtx)
-    go [] ctx acc = (reverse acc, ctx)
-    go (expr : cs) ctx@(EvalCtx _ globalEnv) acc =
-        case evalExpr expr ctx of
-            Left err -> (reverse (Left err : acc), ctx)
-            Right resVal ->
-                let nextEnv = case resVal of
-                        RBinding key val -> HM.insert key val globalEnv
-                        _ -> globalEnv
-                 in go cs (EvalCtx nextEnv nextEnv) (Right resVal : acc)
+    go :: [Located SExpr] -> EvalCtx -> [EvalResult] -> Either LangError ([EvalResult], EvalCtx)
+    go [] ctx acc = Right (reverse acc, ctx)
+    go (expr : cs) ctx@(EvalCtx _ globalEnv) acc = do
+        resVal <- evalExpr expr ctx
+        let nextEnv = case resVal of
+                RBinding key val -> HM.insert key val globalEnv
+                _ -> globalEnv
+            nextCtx = EvalCtx nextEnv nextEnv
+        nextCtx `seq` go cs nextCtx (resVal : acc)

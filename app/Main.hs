@@ -5,7 +5,8 @@ module Main (main) where
 import AST (ASTParserState (..), SExpr, initialASTState, runAST)
 import qualified Data.Text as T
 import qualified Data.Text.IO.Utf8 as TIO
-import Eval (EvalCtx (..), EvalResult (..), evalSExprs, initialEvalCtx)
+import qualified Data.HashMap.Strict as HM
+import Eval (EvalCtx (..), EvalResult (..), evalExpr, initialEvalCtx)
 import LanguageError (LangError (..))
 import Lexer (runTokenizer)
 import Location (Located)
@@ -19,13 +20,22 @@ pipeline src astState = do
     runAST astState{aTokenStream = tokens}
 
 consumeResults :: T.Text -> EvalCtx -> (EvalResult -> IO ()) -> [Located SExpr] -> IO EvalCtx
-consumeResults src evalCtx printer exprs = do
-    let (evalResults, finalEvalCtx) = evalSExprs exprs evalCtx
-    mapM_ render evalResults
-    return finalEvalCtx
-    where
-        render (Left err) = TIO.putStrLn $ renderErrorMsg src err
-        render (Right res) = printer res
+consumeResults src initialCtx printer expressions = go expressions initialCtx
+  where
+    go :: [Located SExpr] -> EvalCtx -> IO EvalCtx
+    go [] ctx = return ctx
+    go (expr : cs) ctx@(EvalCtx _ globalEnv) = 
+        case evalExpr expr ctx of
+            Left err -> do
+                TIO.putStrLn $ renderErrorMsg src err
+                return ctx
+            Right resVal -> do
+                printer resVal
+                let nextEnv = case resVal of
+                        RBinding key val -> HM.insert key val globalEnv
+                        _                -> globalEnv
+                    nextCtx = EvalCtx nextEnv nextEnv
+                nextCtx `seq` go cs nextCtx
 
 collectInput :: Int -> T.Text -> IO (Maybe T.Text)
 collectInput nestingLevel acc = do
