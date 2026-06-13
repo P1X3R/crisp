@@ -1,0 +1,4 @@
+error: expected list type but got symbol
+
+1 | (lambda not-a-list 42)
+  |         ^

@@ -1,0 +1,4 @@
+error: attempted to divide by zero
+
+1 | (/ 5 0)
+  |      ^

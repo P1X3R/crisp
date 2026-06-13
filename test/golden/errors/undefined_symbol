@@ -1,0 +1,4 @@
+error: undefined symbol (id: 20)
+
+1 | (+ total-amount 10)
+  |    ^

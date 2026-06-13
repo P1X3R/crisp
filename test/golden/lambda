@@ -1,0 +1,4 @@
+<binding: id 20 -> 1>
+<binding: id 21 -> <closure>>
+<binding: id 20 -> 2>
+2

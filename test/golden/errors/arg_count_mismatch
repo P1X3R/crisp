@@ -1,0 +1,4 @@
+error: expected 3 but got 5 in function if
+
+1 | (if #t 1 2 3 4)
+  |  ^

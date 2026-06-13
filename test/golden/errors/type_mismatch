@@ -1,0 +1,4 @@
+error: expected number type but got string
+
+1 | (+ 1 "not a number")
+  |      ^

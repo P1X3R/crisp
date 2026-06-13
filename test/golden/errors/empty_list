@@ -1,0 +1,4 @@
+error: tried to call empty car operation
+
+1 | (car (quote ()))
+  |      ^

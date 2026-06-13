@@ -1,0 +1,4 @@
+error: expected symbol type but got number
+
+1 | (define 123 456)
+  |         ^
