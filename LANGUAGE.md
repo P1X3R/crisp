@@ -16,7 +16,7 @@ program    = { expression } ;
 expression = atom | list | quoted ;
 
 (* The Core Containers *)
-list       = "(" , { expression } , ")" ;
+list = "(" , [ expression , { whitespace , expression } ] , ")" ;
 quoted     = "'" , expression ;
 
 (* The Building Blocks (Atoms) *)
@@ -80,6 +80,39 @@ flowchart TD
     * If it evaluates to a **Special Form**, argument evaluation is deferred. The raw list expressions are passed down directly.
     * If it evaluates to a **Procedure** (Primitives or Closures), all arguments are evaluated sequentially from left to right.
 
+### Extended Types
+
+In addition to numbers, booleans, strings, lists, and functions, Crisp defines two special value types.
+
+#### Binding Values (`<binding>`)
+
+Binding values are produced by `define`. They represent a pending symbol-to-value association.
+
+When a binding value reaches an evaluation boundary (such as the REPL or a sequential evaluation context), the binding is committed to the active environment.
+
+Example:
+```cl
+(define x 10)
+
+; => <binding x 10>
+
+x
+; => 10
+```
+
+#### Print Values (`<print>`)
+
+Print values are produced by `display`. They encapsulate a value that should be written to the standard output when processed by an evaluation boundary.
+
+The wrapped value remains available for equality checks and further evaluation.
+
+```cl
+(display "hello")
+
+; prints: hello
+; => <print "hello">
+```
+
 ## List Representation
 
 Crisp supports only proper lists.
@@ -113,6 +146,7 @@ Special forms handle language scaffolding that behave like functions that contro
 - **Syntax:** `(define <symbol> <expression>)`
 - **Semantics:** Evaluates `<expression>` in the active context, then injects or replaces the binding of `<symbol>` directly inside the **Global Environment**.
 - **Constraints:** `<symbol>` must be a pure identifier token, not a sub-expression.
+- **Environment Impact:** When a `<binding>` value is processed by an expression evaluation boundary (such as the top-level REPL or sequential block evaluation), the mapping is unpacked, and the symbol is committed to that environment scope.
 
 ### `if`
 
@@ -184,4 +218,4 @@ Primitives are standard procedures embedded inside the initial environment. Argu
 | Primitive | Expected Arguments | Types | Semantics |
 | --- | --- | --- | --- |
 | `not` | 1 | Boolean | Boolean inversion. |
-| `display` | 1 | Any | Prints its argument to the standard output. |
+| `display` | 1 | Any | Yields `<display>` value type, which prints its argument to the standard output. |
