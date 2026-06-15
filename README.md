@@ -128,15 +128,15 @@ stack run
 Example:
 
 ```text
-> (+ 2 3)
+crisp> (+ 2 3)
 5
 
-> (define square (lambda (x) (* x x)))
+crisp> (define square (lambda (x) (* x x)))
 
-> (square 8)
+crisp> (square 8)
 64
 
-> ,q
+crisp> ,q
 Bye!
 ```
 
