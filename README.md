@@ -171,6 +171,69 @@ Crisp was created as an exploration of language implementation, parser construct
 
 The project prioritizes simplicity and educational value over language completeness or runtime performance.
 
+## Design Decisions & Trade-offs
+
+### Evaluation Effects as Values
+
+Most Lisp interpreters execute side effects immediately when special forms such as `define` or procedures such as `display` are evaluated.
+
+Crisp instead models these operations as explicit values:
+
+* `define` produces a `<binding>` value.
+* `display` produces a `<print>` value.
+
+These values are later consumed by an evaluation boundary (such as the REPL or sequential program evaluation).
+
+This makes evaluation effects explicit values that can be stored, delayed, and potentially transformed before execution. This also moves the side-effect concern from the evaluator (which benefits from being pure in languages like Haskell) to another place.
+
+The tradeoff is additional complexity to the runtime model and the introduction of value types that do not exist in traditional Lisp systems.
+
+### Tree-Walk Evaluation
+
+Crisp uses a traditional tree-walk interpreter rather than compiling source code to bytecode.
+
+This keeps the implementation extremely simple, making evaluation behavior directly traceable to the abstract syntax tree.
+
+The trade-off is a lower runtime performance compared to other methods (bytecode VM or compilation).
+
+### Eager Evaluation
+
+Function arguments are evaluated before function application.
+
+This significantly simplifies the runtime model.
+
+The trade-off is that Crisp cannot express lazy evaluation patterns without additional language features.
+
+### Lexical Scoping and Closures
+
+Functions capture the environment in which they are defined.
+
+This allows closures to behave predictably and matches the behavior of Scheme-family languages.
+
+The trade-off is additional complexity in the environment management (in this case, keeping a local and global envirionments).
+
+### Sequential `let` Bindings
+
+`let` bindings are evaluated sequentially, similar to Scheme's `let*`.
+
+```cl
+(let ((x 2)
+      (y (* x 5)))
+  (+ x y))
+```
+
+Later bindings may reference earlier ones within the same binding block.
+
+This approach is often more convenient and simpler to implement, but differs from the simultaneous binding semantics of traditional `let`.
+
+### Proper Lists Only
+
+Crisp supports only proper lists and does not expose dotted pairs or improper lists.
+
+This significantly simplifies list manipulation, equality checking, and runtime representation.
+
+The trade-off is reduced compatibility with some traditional Lisp techniques that rely on arbitrary cons-cell structures.
+
 ## Testing
 
 The interpreter is tested through:
